@@ -9,7 +9,7 @@ from database import (
     get_paid_status, set_paid_status,
     count_registered, count_activated,
     get_registered_users, get_paid_users,
-    clear_database, mark_as_paid
+    clear_database, mark_as_paid, count_paid
 )
 from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK
 from aiogram.types import BotCommand,BotCommandScopeChat, FSInputFile
@@ -62,7 +62,7 @@ async def report(message: Message):
 
     # Новая строчка — считаем оплативших
 
-    paid_count = await mark_as_paid()
+    paid_count = await count_paid()
         
     await message.answer(
         f"📊 Статистика:\n"

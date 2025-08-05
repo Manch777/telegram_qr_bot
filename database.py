@@ -62,6 +62,10 @@ async def count_registered():
 async def count_activated():
     return await database.fetch_val("SELECT COUNT(*) FROM users WHERE status = 'активирован'")
 
+async def count_paid():
+    query = "SELECT COUNT(*) FROM users WHERE paid = 'оплатил'"
+    return await database.fetch_val(query)
+
 async def get_registered_users():
     query = users.select().order_by(users.c.status.desc())
     return await database.fetch_all(query)
