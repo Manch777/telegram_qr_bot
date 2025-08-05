@@ -1,6 +1,6 @@
 aiogram==3.4.1
 databases[postgresql]==0.8.0
-sqlalchemy==2.0.30
+sqlalchemy==1.4.42
 asyncpg==0.29.0
 openpyxl==3.1.2
 qrcode==7.4.2
