@@ -63,7 +63,7 @@ async def report(message: Message):
     # Новая строчка — считаем оплативших
     async with aiosqlite.connect("users.db") as db:
         cursor = await db.execute("SELECT COUNT(*) FROM users WHERE paid = 'оплатил'")
-        paid_count = (await cursor.fetchone())[0]
+    paid_count = await mark_as_paid()
         
     await message.answer(
         f"📊 Статистика:\n"
@@ -88,8 +88,8 @@ async def list_users(message: Message):
 
     text = "📄 Зарегистрированные пользователи:\n\n"
     for user_id, username, paid, status in users:
-        name = f"@{username}" if username else f"(id: {user_id})"
-        text += f"{name} — {status}\n"
+        name = f"@{user['username']}" if user['username'] else f"(id: {user['user_id']})"
+        text += f"{name} — статус: {user['status']}, оплата: {user['paid']}\n"
 
     # если список слишком длинный — отправим как файл
     if len(text) > 4000:
@@ -198,8 +198,8 @@ async def list_paid_users(message: Message):
 
     text = "💰 Оплатившие пользователи:\n\n"
     for user_id, username, status, paid in users:
-        name = f"@{username}" if username else f"(id: {user_id})"
-        text += f"{name} — {paid}\n"
+        name = f"@{user['username']}" if user['username'] else f"(id: {user['user_id']})"
+        text += f"{name} — статус: {user['status']}, оплата: {user['paid']}\n"
 
     if len(text) > 4000:
         with open("paid_users.txt", "w", encoding="utf-8") as f:
