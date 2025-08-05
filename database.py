@@ -66,13 +66,21 @@ async def count_paid():
     query = "SELECT COUNT(*) FROM users WHERE paid = 'оплатил'"
     return await database.fetch_val(query)
 
+# Получить всех зарегистрированных пользователей
 async def get_registered_users():
-    query = users.select().order_by(users.c.status.desc())
-    return await database.fetch_all(query)
+    query = users.select().with_only_columns(
+        users.c.user_id, users.c.username, users.c.paid, users.c.status
+    ).order_by(users.c.status.desc())
+    rows = await database.fetch_all(query)
+    return [(row.user_id, row.username, row.paid, row.status) for row in rows]
 
+# Получить только оплативших
 async def get_paid_users():
-    query = users.select().where(users.c.status.isnot(None))
-    return await database.fetch_all(query)
+    query = users.select().with_only_columns(
+        users.c.user_id, users.c.username, users.c.status, users.c.paid
+    ).where(users.c.paid == "оплатил")
+    rows = await database.fetch_all(query)
+    return [(row.user_id, row.username, row.status, row.paid) for row in rows]
 
 async def clear_database():
     await database.execute(users.delete())
