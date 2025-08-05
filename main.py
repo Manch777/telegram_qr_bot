@@ -5,8 +5,9 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.types import BotCommand, Message
 
 from config import BOT_TOKEN
-from database import init_db, get_status, update_status
-
+#from database import init_db, get_status, update_status
+#from database import database  # подключаем объект database
+from database import connect_db, disconnect_db, get_status, update_status
 from handlers import user, admin
 
 
@@ -38,6 +39,9 @@ async def deep_link_start_handler(message: Message):
 
 
 async def main():
+
+    await connect_db()
+    
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
 
@@ -49,7 +53,6 @@ async def main():
     dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.text.len() > 7)
 
     # инициализация
-    await init_db()
     os.makedirs("qrs", exist_ok=True)
 
     await bot.set_my_commands([
@@ -60,7 +63,7 @@ async def main():
 
     print("✅ Бот запущен")
     await dp.start_polling(bot)
-
+    await disconnect_db()
 
 if __name__ == "__main__":
     asyncio.run(main())

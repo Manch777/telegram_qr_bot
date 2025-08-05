@@ -5,7 +5,13 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo,CallbackQuery 
 from aiogram.types import WebAppData
 from qr_generator import generate_qr
-from database import add_user, get_status, update_status, count_registered, count_activated, get_registered_users,get_paid_users, mark_as_paid, get_paid_status, set_paid_status,clear_database 
+from database import (
+    add_user, update_status, get_status,
+    get_paid_status, set_paid_status,
+    count_registered, count_activated,
+    get_registered_users, get_paid_users,
+    clear_database, mark_as_paid
+)
 from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK
 from aiogram.types import BotCommand,BotCommandScopeChat, FSInputFile
 from openpyxl import Workbook

@@ -1,85 +1,78 @@
-import aiosqlite
-from config import ADMIN_IDS
-from datetime import datetime
+from sqlalchemy import (
+    Column, String, MetaData, Table, create_engine, BigInteger
+)
+from databases import Database
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from config import POSTGRES_URL
+
+# --- Подключение ---
+engine = create_engine(POSTGRES_URL.replace("+asyncpg", ""))
+metadata = MetaData()
+
+# --- Таблица пользователей ---
+users = Table(
+    "users",
+    metadata,
+    Column("user_id", BigInteger, primary_key=True),  # Telegram user_id может быть очень большим
+    Column("username", String),
+    Column("paid", String, default="не оплатил"),
+    Column("status", String, default="не активирован")
+)
+
+database = Database(POSTGRES_URL)
 
 
-DB_NAME = "users.db"
+# --- CRUD Функции ---
+async def connect_db():
+    await database.connect()
 
-async def init_db():
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute('''
-            CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY,
-                username TEXT,
-                paid TEXT,
-                status TEXT DEFAULT 'не активирован'
-            )
-        ''')
-        await db.commit()
+async def disconnect_db():
+    await database.disconnect()
 
-async def add_user(user_id, username):
-    if user_id in ADMIN_IDS:
-        return  # админов не добавляем
+async def add_user(user_id: int, username: str):
+    query = pg_insert(users).values(
+        user_id=user_id,
+        username=username or "Без ника",
+        paid="не оплатил",
+        status="не активирован"
+    ).on_conflict_do_nothing(index_elements=["user_id"])
+    await database.execute(query)
 
-    async with aiosqlite.connect("users.db") as db:
-        await db.execute(
-            "INSERT OR IGNORE INTO users (user_id, username, paid, status) VALUES (?, ?, ?, ?)",
-            (user_id, username or "Без ника", "не оплатил", "не активирован")
-        )
-        await db.commit()
-
-async def update_status(user_id, status):
-    async with aiosqlite.connect(DB_NAME) as db:
-        await db.execute("UPDATE users SET status=? WHERE user_id=?", (status, user_id))
-        await db.commit()
-
-async def get_status(user_id):
-    async with aiosqlite.connect(DB_NAME) as db:
-        cursor = await db.execute("SELECT status FROM users WHERE user_id=?", (user_id,))
-        row = await cursor.fetchone()
-        return row[0] if row else None
-    
-async def count_registered():
-    async with aiosqlite.connect("users.db") as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM users")
-        result = await cursor.fetchone()
-        return result[0]
-
-async def count_activated():
-    async with aiosqlite.connect("users.db") as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM users WHERE status = 'активирован'")
-        result = await cursor.fetchone()
-        return result[0]
-    
-async def get_registered_users():
-    async with aiosqlite.connect("users.db") as db:
-        cursor = await db.execute("SELECT user_id, username, paid, status FROM users ORDER BY status DESC")
-        return await cursor.fetchall()
-
-async def get_paid_users():
-    async with aiosqlite.connect("users.db") as db:
-        cursor = await db.execute(
-            "SELECT user_id, username, status, paid  FROM users WHERE status IS NOT NULL"
-        )
-        return await cursor.fetchall()
-
-async def mark_as_paid(user_id: int):
-    async with aiosqlite.connect("users.db") as db:
-        await db.execute("UPDATE users SET paid = 'оплатил' WHERE user_id = ?", (user_id,))
-        await db.commit()
-
-async def get_paid_status(user_id):
-    async with aiosqlite.connect("users.db") as db:
-        cursor = await db.execute("SELECT paid FROM users WHERE user_id=?", (user_id,))
-        row = await cursor.fetchone()
-        return row[0] if row else None
+async def update_status(user_id: int, status: str):
+    query = users.update().where(users.c.user_id == user_id).values(status=status)
+    await database.execute(query)
 
 async def set_paid_status(user_id: int, paid: str):
-    async with aiosqlite.connect("users.db") as db:
-        await db.execute("UPDATE users SET paid = ? WHERE user_id = ?", (paid, user_id))
-        await db.commit()
+    query = users.update().where(users.c.user_id == user_id).values(paid=paid)
+    await database.execute(query)
+
+async def get_status(user_id: int):
+    query = users.select().where(users.c.user_id == user_id)
+    row = await database.fetch_one(query)
+    return row["status"] if row else None
+
+async def get_paid_status(user_id: int):
+    query = users.select().where(users.c.user_id == user_id)
+    row = await database.fetch_one(query)
+    return row["paid"] if row else None
+
+async def count_registered():
+    return await database.fetch_val("SELECT COUNT(*) FROM users")
+
+async def count_activated():
+    return await database.fetch_val("SELECT COUNT(*) FROM users WHERE status = 'активирован'")
+
+async def get_registered_users():
+    query = users.select().order_by(users.c.status.desc())
+    return await database.fetch_all(query)
+
+async def get_paid_users():
+    query = users.select().where(users.c.status.isnot(None))
+    return await database.fetch_all(query)
 
 async def clear_database():
-    async with aiosqlite.connect("users.db") as db:
-        await db.execute("DELETE FROM users")
-        await db.commit()
+    await database.execute(users.delete())
+
+async def mark_as_paid(user_id: int):
+    query = users.update().where(users.c.user_id == user_id).values(paid="оплатил")
+    await database.execute(query)

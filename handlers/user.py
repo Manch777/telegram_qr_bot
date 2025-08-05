@@ -2,7 +2,13 @@ from aiogram import Router, F
 from aiogram.types import FSInputFile, Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, WebAppInfo
 from aiogram.filters import CommandStart
 from config import CHANNEL_ID, INSTAGRAM_LINK, ADMIN_IDS, PAYMENT_LINK
-from database import add_user, update_status, get_status, get_paid_status, set_paid_status
+from database import (
+    add_user, update_status, get_status,
+    get_paid_status, set_paid_status,
+    count_registered, count_activated,
+    get_registered_users, get_paid_users,
+    clear_database
+)
 from qr_generator import generate_qr
 
 router = Router()

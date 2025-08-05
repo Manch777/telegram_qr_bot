@@ -1,6 +1,12 @@
-BOT_TOKEN = "8421221057:AAEtH6tnDHXG5EohTvysSZl5Pnp_mkKMl_A"
-CHANNEL_ID = "@test1test123456test"
-INSTAGRAM_LINK = "https://instagram.com/yourpage"
-SCAN_WEBAPP_URL = "https://scanner-webapp-three.vercel.app/"
-ADMIN_IDS = [486487068]
-PAYMENT_LINK = "https://www.sberbank.com/sms/pbpn?requisiteNumber=79099137776"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHANNEL_ID = os.getenv("CHANNEL_ID")
+INSTAGRAM_LINK = os.getenv("INSTAGRAM_LINK")
+SCAN_WEBAPP_URL = os.getenv("SCAN_WEBAPP_URL")
+ADMIN_IDS = [int(id_) for id_ in os.getenv("ADMIN_IDS", "").split(",") if id_]
+PAYMENT_LINK = os.getenv("PAYMENT_LINK")
+POSTGRES_URL = os.getenv("POSTGRES_URL")
