@@ -9,7 +9,7 @@ from database import connect_db, disconnect_db, get_status, update_status
 from handlers import user, admin
 
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = os.getenv("WEBHOOK_URL") + WEBHOOK_PATH
+FULL_WEBHOOK_URL = WEBHOOK_URL + WEBHOOK_PATH
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -42,7 +42,7 @@ dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.te
 
 async def on_startup(app: web.Application):
     await connect_db()
-    await bot.set_webhook(WEBHOOK_URL)
+    await bot.set_webhook(FULL_WEBHOOK_URL)
     await bot.set_my_commands([
         BotCommand(command="start", description="Начать"),
         BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
