@@ -86,8 +86,8 @@ async def payment_confirmation(callback: CallbackQuery):
     # Отправка админу уведомления
     for admin_id in ADMIN_IDS:
         kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"approve:{user_id}"),
-            InlineKeyboardButton(text="❌ Не подтверждена", callback_data=f"reject:{user_id}")]
+            [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"approve:{user_id}")],
+            [InlineKeyboardButton(text="❌ Не подтверждена", callback_data=f"reject:{user_id}")]
         ])
         await callback.bot.send_message(
             chat_id=admin_id,
