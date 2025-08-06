@@ -1,23 +1,24 @@
-import asyncio
 import os
-
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import BotCommand, Message
+from aiogram.webhook.aiohttp_server import setup_application
 
 from config import BOT_TOKEN
-#from database import init_db, get_status, update_status
-#from database import database  # подключаем объект database
 from database import connect_db, disconnect_db, get_status, update_status
 from handlers import user, admin
 
+WEBHOOK_PATH = "/webhook"
+WEBHOOK_URL = os.getenv("WEBHOOK_URL") + WEBHOOK_PATH
 
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
 
+# Обработка deep-link QR
 async def deep_link_start_handler(message: Message):
     parts = message.text.split()
-
     if len(parts) == 2:
         qr_code = parts[1]
-
         try:
             user_id = int(qr_code)
         except ValueError:
@@ -25,7 +26,6 @@ async def deep_link_start_handler(message: Message):
             return
 
         status = await get_status(user_id)
-
         if status is None:
             await message.answer("❌ QR-код не найден.")
         elif status == "не активирован":
@@ -33,37 +33,41 @@ async def deep_link_start_handler(message: Message):
             await message.answer("✅ Пропуск активирован. Добро пожаловать!")
         else:
             await message.answer("⚠️ Этот QR-код уже использован.")
-    # ВАЖНО: не обрабатываем здесь обычный /start — пусть он идёт в user.py
-    # else:
-    #     await message.answer("Привет! Используй /admin для сканирования QR-кодов.")
+
+# Инициализация
+dp.include_router(user.router)
+dp.include_router(admin.router)
+dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.text.len() > 7)
 
 
-async def main():
-
+async def on_startup(app: web.Application):
     await connect_db()
-    
-    bot = Bot(token=BOT_TOKEN)
-    dp = Dispatcher()
-
-    # подключаем модули
-    dp.include_router(user.router)
-    dp.include_router(admin.router)
-
-    # обрабатываем только /start <код> — а не обычный /start
-    dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.text.len() > 7)
-
-    # инициализация
-    os.makedirs("qrs", exist_ok=True)
-
+    await bot.set_webhook(WEBHOOK_URL)
     await bot.set_my_commands([
         BotCommand(command="start", description="Начать"),
         BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
-
     ])
+    print("✅ Бот запущен (webhook)")
 
-    print("✅ Бот запущен")
-    #await dp.start_polling(bot)
+
+async def on_shutdown(app: web.Application):
+    await bot.delete_webhook()
     await disconnect_db()
 
+
+async def healthcheck(request):
+    return web.Response(text="OK")
+
+
+def create_app():
+    app = web.Application()
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
+    app.router.add_post(WEBHOOK_PATH, dp.webhook_handler())
+    app.router.add_get("/healthcheck", healthcheck)
+    return app
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    app = create_app()
+    web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
