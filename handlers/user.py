@@ -64,12 +64,14 @@ async def check_subscription(callback: CallbackQuery):
         [InlineKeyboardButton(text="💳 Оплатить", url=PAYMENT_LINK)],
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid:{user_id}")]
     ])
-    await callback.message.answer("Вау! Кажется, ты все сделал правильно ✨", reply_markup=kb)
-    await callback.message.answer("Твоя скидка 50% активирована, стоимость билета - 250 руб", reply_markup=kb)
-    await callback.message.answer("", reply_markup=kb)
-    await callback.message.answer("❗️Не забудь в комментариях платежа указать свой ник в telegram", reply_markup=kb)
-    await callback.message.answer("", reply_markup=kb)
-    await callback.message.answer("Ну что, готов оплатить?", reply_markup=kb)
+    
+    text_1 = (
+    "Вау! Кажется, ты все сделал правильно ✨\n"
+    "Твоя скидка 50% активирована, стоимость билета - 250 руб\n\n"
+    "❗️Не забудь в комментариях платежа указать свой ник в telegram\n\n"
+    "Ну что, готов оплатить?"
+    )
+    await callback.message.answer(text_1, reply_markup=kb)
 
 @router.callback_query(F.data.startswith("paid:"))
 async def payment_confirmation(callback: CallbackQuery):
