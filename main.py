@@ -2,7 +2,7 @@ import os
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import BotCommand, Message
-from aiogram.webhook.aiohttp_server import setup_application
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from config import BOT_TOKEN
 from database import connect_db, disconnect_db, get_status, update_status
@@ -58,14 +58,18 @@ async def on_shutdown(app: web.Application):
 async def healthcheck(request):
     return web.Response(text="OK")
 
-
 def create_app():
     app = web.Application()
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
-    app.router.add_post(WEBHOOK_PATH, dp.webhook_handler())
+
+    # Обработка webhook-запросов Telegram
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+
+    # Healthcheck для Render
     app.router.add_get("/healthcheck", healthcheck)
     return app
+
 
 
 if __name__ == "__main__":
