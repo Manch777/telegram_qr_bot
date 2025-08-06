@@ -2,7 +2,7 @@ import os
 from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import BotCommand, Message
-from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 
 from config import BOT_TOKEN, WEBHOOK_URL
 from database import connect_db, disconnect_db, get_status, update_status
@@ -14,7 +14,8 @@ FULL_WEBHOOK_URL = WEBHOOK_URL + WEBHOOK_PATH
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Обработка deep-link QR
+
+# deep-link обработчик
 async def deep_link_start_handler(message: Message):
     parts = message.text.split()
     if len(parts) == 2:
@@ -34,7 +35,8 @@ async def deep_link_start_handler(message: Message):
         else:
             await message.answer("⚠️ Этот QR-код уже использован.")
 
-# Инициализация
+
+# Регистрация роутеров
 dp.include_router(user.router)
 dp.include_router(admin.router)
 dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.text.len() > 7)
@@ -58,20 +60,21 @@ async def on_shutdown(app: web.Application):
 async def healthcheck(request):
     return web.Response(text="OK")
 
+
 def create_app():
     app = web.Application()
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
 
-    # Обработка webhook-запросов Telegram
+    # Обработка webhook-запросов
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
 
-    # Healthcheck для Render
+    # Для Render Healthcheck
     app.router.add_get("/healthcheck", healthcheck)
     return app
-
 
 
 if __name__ == "__main__":
     app = create_app()
     web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+
