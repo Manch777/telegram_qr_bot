@@ -20,10 +20,14 @@ async def start_command(message: Message):
         [InlineKeyboardButton(text="📷 Подписаться на Instagram", url=INSTAGRAM_LINK)],
         [InlineKeyboardButton(text="🔍 Проверить подписку", callback_data="check_subscription")]
     ])
-    await message.answer("Хей! Приветствуем тебя в ЖАЖДА community 🖤", reply_markup=keyboard)
-    await message.answer("Теперь ты точно знаешь, где лучшие тусовки", reply_markup=keyboard)
-    await message.answer("", reply_markup=keyboard)
-    await message.answer("Подпишись на наши каналы, чтобы получить проходку со скидкой 👇", reply_markup=keyboard)
+    text = (
+    "Хей! Приветствуем тебя в ЖАЖДА community 🖤\n"
+    "Теперь ты точно знаешь, где лучшие тусовки\n\n"
+    "Подпишись на наши каналы, чтобы получить проходку со скидкой 👇"
+    )
+
+    await message.answer(text, reply_markup=keyboard)
+
 
 @router.callback_query(F.data == "check_subscription")
 async def check_subscription(callback: CallbackQuery):
