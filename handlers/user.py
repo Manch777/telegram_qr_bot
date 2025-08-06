@@ -20,7 +20,10 @@ async def start_command(message: Message):
         [InlineKeyboardButton(text="📷 Подписаться на Instagram", url=INSTAGRAM_LINK)],
         [InlineKeyboardButton(text="🔍 Проверить подписку", callback_data="check_subscription")]
     ])
-    await message.answer("Привет! Подпишись на каналы, чтобы получить скидку 👇", reply_markup=keyboard)
+    await message.answer("Хей! Приветствуем тебя в ЖАЖДА community 🖤
+                           Теперь ты точно знаешь, где лучшие тусовки
+
+                           Подпишись на наши каналы, чтобы получить проходку со скидкой 👇", reply_markup=keyboard)
 
 @router.callback_query(F.data == "check_subscription")
 async def check_subscription(callback: CallbackQuery):
@@ -57,7 +60,12 @@ async def check_subscription(callback: CallbackQuery):
         [InlineKeyboardButton(text="💳 Оплатить", url=PAYMENT_LINK)],
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid:{user_id}")]
     ])
-    await callback.message.answer("✅ Подписка подтверждена.\nТеперь оплатите участие:", reply_markup=kb)
+    await callback.message.answer("Вау! Кажется, ты все сделал правильно ✨
+                                    Твоя скидка 50% активирована, стоимость билета - 250 руб
+
+                                   ❗️Не забудь в комментариях платежа указать свой ник в telegram 
+
+                                    Ну что, готов оплатить?", reply_markup=kb)
 
 @router.callback_query(F.data.startswith("paid:"))
 async def payment_confirmation(callback: CallbackQuery):
