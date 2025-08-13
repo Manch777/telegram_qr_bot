@@ -68,7 +68,7 @@ async def handle_promocode(message: Message):
         if code not in PROMOCODES:
             await message.answer("❌ Неверный промокод. Попробуйте снова.")
             return
-        
+        await process_payment(message, "promocode", from_message=True)
 
 # Универсальная функция оплаты
 async def process_payment(callback_or_message, ticket_type, from_message=False):
