@@ -1,7 +1,7 @@
 # database.py
 from sqlalchemy import (
     Column, String, MetaData, Table, create_engine,
-    BigInteger, Integer, select, desc
+    BigInteger, Integer, Date, select, desc, text
 )
 from databases import Database
 from config import POSTGRES_URL
@@ -11,17 +11,18 @@ engine = create_engine(POSTGRES_URL.replace("+asyncpg", ""))
 metadata = MetaData()
 
 # --- Таблица покупок (исторически называется "users") ---
-# Теперь: одна строка = один купленный билет.
+# Одна строка = один купленный билет.
 users = Table(
     "users",
     metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),  # ID записи (билета)
-    Column("user_id", BigInteger, index=True, nullable=False),    # Telegram user_id (может повторяться)
+    Column("id", Integer, primary_key=True, autoincrement=True),   # ID записи (билета)
+    Column("user_id", BigInteger, index=True, nullable=False),     # Telegram user_id (может повторяться)
     Column("username", String),
-    Column("event_code", String),                                 # код/название мероприятия
-    Column("ticket_type", String),                                # тип билета
-    Column("paid", String, default="не оплатил"),                 # не оплатил | на проверке | оплатил | отклонено
-    Column("status", String, default="не активирован")            # не активирован | активирован
+    Column("event_code", String),                                   # код/название мероприятия
+    Column("ticket_type", String),                                  # тип билета
+    Column("paid", String, default="не оплатил"),                   # не оплатил | на проверке | оплатил | отклонено
+    Column("status", String, default="не активирован"),             # не активирован | активирован
+    Column("purchase_date", Date, server_default=text("CURRENT_DATE"))  # дата покупки (без времени)
 )
 
 database = Database(POSTGRES_URL)
@@ -40,6 +41,7 @@ async def disconnect_db():
 async def add_user(user_id: int, username: str, event_code: str, ticket_type: str) -> int:
     """
     Создать новую покупку (новую строку). Возвращает id созданной записи (row_id).
+    purchase_date ставится в БД как CURRENT_DATE (server_default).
     """
     query = users.insert().values(
         user_id=user_id,
@@ -47,42 +49,34 @@ async def add_user(user_id: int, username: str, event_code: str, ticket_type: st
         event_code=event_code,
         ticket_type=ticket_type,
         paid="не оплатил",
-        status="не активирован"
+        status="не активирован",
+        # purchase_date не передаём — БД выставит CURRENT_DATE сама
     ).returning(users.c.id)
     row_id = await database.fetch_val(query)
     return int(row_id)
 
 async def get_row(row_id: int):
-    """
-    Вернуть полную запись по id строки (или None).
-    """
+    """Вернуть полную запись по id строки (или None)."""
     query = select(users).where(users.c.id == row_id)
     return await database.fetch_one(query)
 
 # ---- Статусы по id строки ----
 async def get_status_by_id(row_id: int):
-    q = select(users.c.status).where(users.c.id == row_id)
-    r = await database.fetch_one(q)
+    r = await database.fetch_one(select(users.c.status).where(users.c.id == row_id))
     return r["status"] if r else None
 
 async def update_status_by_id(row_id: int, status: str):
-    q = users.update().where(users.c.id == row_id).values(status=status)
-    await database.execute(q)
+    await database.execute(users.update().where(users.c.id == row_id).values(status=status))
 
 async def get_paid_status_by_id(row_id: int):
-    q = select(users.c.paid).where(users.c.id == row_id)
-    r = await database.fetch_one(q)
+    r = await database.fetch_one(select(users.c.paid).where(users.c.id == row_id))
     return r["paid"] if r else None
 
 async def set_paid_status_by_id(row_id: int, paid: str):
-    q = users.update().where(users.c.id == row_id).values(paid=paid)
-    await database.execute(q)
+    await database.execute(users.update().where(users.c.id == row_id).values(paid=paid))
 
 # ---- Подсчёты (по мероприятию и типу) ----
 async def count_ticket_type_paid_for_event(event_code: str, ticket_type: str) -> int:
-    """
-    Сколько ОПЛАЧЕННЫХ билетов данного типа для конкретного мероприятия.
-    """
     q = """
         SELECT COUNT(*)
         FROM users
@@ -91,7 +85,7 @@ async def count_ticket_type_paid_for_event(event_code: str, ticket_type: str) ->
     return await database.fetch_val(q, {"e": event_code, "t": ticket_type})
 
 # =============================================================================
-# Агрегаты / списки (работают по всем строкам = всем билетам)
+# Агрегаты / списки (по всем покупкам)
 # =============================================================================
 
 async def count_registered():
@@ -99,14 +93,12 @@ async def count_registered():
     return await database.fetch_val("SELECT COUNT(*) FROM users")
 
 async def count_activated():
-    """Сколько билетов с pass-статусом 'активирован'."""
-    q = "SELECT COUNT(*) FROM users WHERE status = 'активирован'"
-    return await database.fetch_val(q)
+    """Сколько билетов со статусом 'активирован'."""
+    return await database.fetch_val("SELECT COUNT(*) FROM users WHERE status = 'активирован'")
 
 async def count_paid():
     """Сколько билетов со статусом оплаты 'оплатил'."""
-    q = "SELECT COUNT(*) FROM users WHERE paid = 'оплатил'"
-    return await database.fetch_val(q)
+    return await database.fetch_val("SELECT COUNT(*) FROM users WHERE paid = 'оплатил'")
 
 async def get_registered_users():
     """
@@ -134,7 +126,7 @@ async def clear_database():
     await database.execute(users.delete())
 
 # =============================================================================
-# Legacy-обёртки по user_id (для совместимости со старым кодом)
+# Legacy-обёртки по user_id (совместимость со старым кодом)
 # Берут САМУЮ ПОСЛЕДНЮЮ запись этого пользователя (ORDER BY id DESC LIMIT 1)
 # =============================================================================
 
@@ -166,8 +158,7 @@ async def set_ticket_type(user_id: int, ticket_type: str):
     r = await _latest_row_for_user(user_id)
     if not r:
         return
-    q = users.update().where(users.c.id == r["id"]).values(ticket_type=ticket_type)
-    await database.execute(q)
+    await database.execute(users.update().where(users.c.id == r["id"]).values(ticket_type=ticket_type))
 
 async def get_ticket_type(user_id: int):
     r = await _latest_row_for_user(user_id)
@@ -180,8 +171,5 @@ async def mark_as_paid(user_id: int):
     await set_paid_status_by_id(r["id"], "оплатил")
 
 async def count_ticket_type(ticket_type: str):
-    """
-    Кол-во покупок указанного типа по всем мероприятиям (без учёта статуса оплаты).
-    """
-    q = "SELECT COUNT(*) FROM users WHERE ticket_type = :t"
-    return await database.fetch_val(q, {"t": ticket_type})
+    """Кол-во покупок указанного типа по всем мероприятиям (без учёта статуса оплаты)."""
+    return await database.fetch_val("SELECT COUNT(*) FROM users WHERE ticket_type = :t", {"t": ticket_type})
