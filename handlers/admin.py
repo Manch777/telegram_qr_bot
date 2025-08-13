@@ -46,70 +46,46 @@ async def admin_panel(message: Message):
 # =========================
 @router.message(lambda msg: msg.web_app_data is not None)
 async def handle_webapp_data(message: Message):
+    payload = (message.web_app_data.data or "").strip()
+    if not payload:
+        await message.answer("⚠️ Пустые данные из сканера.")
+        return
+
+    # Совместимый парсинг
+    p = payload
+    if p.lower().startswith("qr:"):
+        p = p[3:].lstrip()
+    if p.lower().startswith("r:"):
+        p = p[2:].lstrip()
+    num_str = p.split(":", 1)[0]
     try:
-        data = (message.web_app_data.data or "").strip()
-        row_id_str, _qr_type = data.split(":", 1)  # тип игнорируем — берём из БД
-        row_id = int(row_id_str)
-    except Exception:
+        num = int(num_str)
+    except ValueError:
         await message.answer("⚠️ Неверный формат QR.")
         return
 
-    row = await get_row(row_id)
-    if not row:
-        await message.answer("❌ Билет не найден.")
+    # 1) Старая логика (user_id → последняя покупка)
+    status = await get_status(num)
+    if status is not None:
+        if status == "не активирован":
+            await update_status(num, "активирован")
+            await message.answer("✅ Пропуск активирован. Удачного мероприятия!")
+        else:
+            await message.answer("⚠️ Этот QR-код уже был использован.")
         return
 
-    paid_status = row["paid"]
-    pass_status = row["status"]
-    ticket_type = row["ticket_type"]
-    event_code = row["event_code"] or "-"
-
-    if paid_status != "оплатил":
-        await message.answer(f"❌ Билет не оплачен.\nТип: {ticket_type}")
+    # 2) Новая логика по row_id (если прислали row_id)
+    row = await get_row(num)
+    if row is None:
+        await message.answer("❌ QR-код не найден.")
         return
 
-    if pass_status == "активирован":
-        await message.answer(f"⚠️ Билет уже использован.\nТип: {ticket_type}")
-        return
-
-    await update_status_by_id(row_id, "активирован")
-    extra = f"\nМероприятие: {event_code}" if event_code else ""
-    await message.answer(f"✅ Проход разрешён!\nТип: {ticket_type}{extra}")
-
-# =========================
-# Текстовое сканирование: "QR:<row_id[:что-угодно]>"
-# =========================
-@router.message(F.text.startswith("QR:"))
-async def process_qr_scan_text(message: Message):
-    try:
-        raw = message.text.replace("QR:", "").strip()
-        row_id_str = raw.split(":", 1)[0]
-        row_id = int(row_id_str)
-    except Exception:
-        await message.answer("⚠️ Неверный формат QR.")
-        return
-
-    row = await get_row(row_id)
-    if not row:
-        await message.answer("❌ Билет не найден.")
-        return
-
-    paid_status = row["paid"]
-    pass_status = row["status"]
-    ticket_type = row["ticket_type"]
-    event_code = row["event_code"] or "-"
-
-    if paid_status != "оплатил":
-        await message.answer(f"❌ Билет не оплачен.\nТип: {ticket_type}")
-        return
-
-    if pass_status == "активирован":
-        await message.answer(f"⚠️ Билет уже использован!\nТип: {ticket_type}")
-        return
-
-    await update_status_by_id(row_id, "активирован")
-    extra = f"\nМероприятие: {event_code}" if event_code else ""
-    await message.answer(f"✅ Проход разрешён!\nТип: {ticket_type}{extra}")
+    status_by_id = await get_status_by_id(num)
+    if status_by_id == "не активирован":
+        await update_status_by_id(num, "активирован")
+        await message.answer("✅ Пропуск активирован. Удачного мероприятия!")
+    else:
+        await message.answer("⚠️ Этот QR-код уже был использован.")
 
 # =========================
 # /report — статистика

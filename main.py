@@ -5,7 +5,7 @@ from aiogram.types import BotCommand, Message
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 
 from config import BOT_TOKEN, WEBHOOK_URL
-from database import connect_db, disconnect_db, get_status_by_id, update_status_by_id
+from database import connect_db, disconnect_db, get_status, update_status, get_status_by_id, update_status_by_id, get_row
 from handlers import user, admin
 
 WEBHOOK_PATH = "/webhook"
@@ -22,50 +22,49 @@ dp = Dispatcher()
 #   - "<row_id>:<что-угодно>"
 #   - "QR:R:<row_id>" или "QR:<row_id>[:...]"
 async def deep_link_start_handler(message: Message):
-    payload = message.text.split(maxsplit=1)[1].strip()
+    parts = message.text.split(maxsplit=1)
+    if len(parts) != 2:
+        return
 
-    # Совместимость: допускаем префиксы "QR:" и "R:"
+    payload = parts[1].strip()
+
+    # снимаем возможные префиксы
     p = payload
     if p.lower().startswith("qr:"):
         p = p[3:].lstrip()
     if p.lower().startswith("r:"):
         p = p[2:].lstrip()
 
-    # Берём число ДО первого двоеточия
-    number_part = p.split(":", 1)[0]
+    # берём число до первого двоеточия
+    num_str = p.split(":", 1)[0]
     try:
-        num = int(number_part)
+        num = int(num_str)
     except ValueError:
         await message.answer("❌ Недопустимый QR-код.")
         return
 
-    # 1) Сначала пробуем как row_id (новый формат)
-    row = await get_row(num)
-    if row:
-        paid = row["paid"]
-        status = row["status"]
-
-        if paid != "оплатил":
-            await message.answer("❌ Билет не оплачен.")
-            return
-
-        if status == "активирован":
-            await message.answer("⚠️ Этот билет уже использован.")
-            return
-
-        await update_status_by_id(num, "активирован")
-        await message.answer("✅ Пропуск активирован. Добро пожаловать!")
+    # 1) Сначала — старая логика (user_id → последняя покупка)
+    status = await get_status(num)
+    if status is not None:
+        if status == "не активирован":
+            await update_status(num, "активирован")
+            await message.answer("✅ Пропуск активирован. Добро пожаловать!")
+        else:
+            await message.answer("⚠️ Этот QR-код уже использован.")
         return
 
-    # 2) Иначе — пробуем как старый формат (user_id)
-    legacy_status = await get_status(num)
-    if legacy_status is None:
+    # 2) Фоллбэк — новая логика по row_id (если прислали row_id)
+    row = await get_row(num)
+    if row is None:
         await message.answer("❌ QR-код не найден.")
-    elif legacy_status == "не активирован":
-        await update_status(num, "активирован")
+        return
+
+    status_by_id = await get_status_by_id(num)
+    if status_by_id == "не активирован":
+        await update_status_by_id(num, "активирован")
         await message.answer("✅ Пропуск активирован. Добро пожаловать!")
     else:
-        await message.answer("⚠️ Этот QR-код уже был использован.")
+        await message.answer("⚠️ Этот QR-код уже использован.")
 
 # Регистрация роутеров (важен порядок: админ выше пользователя)
 dp.include_router(admin.router)
