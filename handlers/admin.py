@@ -183,7 +183,7 @@ async def approve_payment(callback: CallbackQuery):
     ticket_type = row["ticket_type"]
     event_code = row["event_code"] or "-"   # <-- вместо row.get(...)
 
-    png_bytes = await generate_qr(row_id, ticket_type)
+    png_bytes = await generate_qr(row_id)
     photo = BufferedInputFile(png_bytes, filename=f"ticket_{row_id}.png")
 
     await callback.bot.send_photo(
