@@ -1,7 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.filters import CommandStart
-from config import CHANNEL_ID, INSTAGRAM_LINK, ADMIN_IDS, PAYMENT_LINK
+from config import CHANNEL_ID, INSTAGRAM_LINK, ADMIN_IDS, PAYMENT_LINK, PROMOCODES
 from database import (
     add_user, update_status, get_status,
     get_paid_status, set_paid_status,
@@ -64,11 +64,11 @@ async def ask_promocode(callback: CallbackQuery):
 async def handle_promocode(message: Message):
     status = await get_status(message.from_user.id)
     if status == "waiting_promocode":
-        code = message.text.strip()
+        code = (message.text or "").strip().upper()
         if code not in PROMOCODES:
             await message.answer("❌ Неверный промокод. Попробуйте снова.")
             return
-        await process_payment(message, "promocode", from_message=True)
+        
 
 # Универсальная функция оплаты
 async def process_payment(callback_or_message, ticket_type, from_message=False):
