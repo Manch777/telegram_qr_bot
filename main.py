@@ -7,6 +7,8 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 from config import BOT_TOKEN, WEBHOOK_URL
 from database import connect_db, disconnect_db, get_status, update_status
 from handlers import user, admin
+from user import router as user_router
+from admin import router as admin_router
 
 WEBHOOK_PATH = "/webhook"
 FULL_WEBHOOK_URL = WEBHOOK_URL + WEBHOOK_PATH
@@ -37,6 +39,8 @@ async def deep_link_start_handler(message: Message):
 
 
 # Регистрация роутеров
+dp.include_router(user_router)
+dp.include_router(admin_router)
 dp.include_router(user.router)
 dp.include_router(admin.router)
 dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.text.len() > 7)
