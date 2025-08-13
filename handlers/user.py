@@ -60,15 +60,23 @@ async def ask_promocode(callback: CallbackQuery):
     # Сохраним состояние пользователя, чтобы поймать ввод
     await update_status(callback.from_user.id, "waiting_promocode")
 
-@router.message(lambda msg: True)
+@router.message(F.text & ~F.text.startswith("/"))
 async def handle_promocode(message: Message):
     status = await get_status(message.from_user.id)
-    if status == "waiting_promocode":
-        code = (message.text or "").strip().upper()
-        if code not in PROMOCODES:
-            await message.answer("❌ Неверный промокод. Попробуйте снова.")
-            return
-        await process_payment(message, "promocode", from_message=True)
+    if status != "waiting_promocode":
+        return
+
+    code = (message.text or "").strip().upper()
+    if code not in PROMOCODES:
+        await message.answer("❌ Неверный промокод. Попробуйте снова или нажмите /start.")
+        return
+
+    # фиксируем тип билета и возвращаем статус в норму
+    await set_ticket_type(message.from_user.id, "promocode")
+    await update_status(message.from_user.id, "не активирован")
+
+    # продолжаем оплату как раньше
+    await process_payment(message, "promocode", from_message=True)
 
 # Универсальная функция оплаты
 async def process_payment(callback_or_message, ticket_type, from_message=False):

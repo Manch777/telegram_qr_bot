@@ -38,8 +38,8 @@ async def deep_link_start_handler(message: Message):
 
 
 # Регистрация роутеров
-dp.include_router(user.router)
 dp.include_router(admin.router)
+dp.include_router(user.router)
 dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.text.len() > 7)
 
 
