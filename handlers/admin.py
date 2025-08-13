@@ -62,7 +62,7 @@ async def handle_webapp_data(message: Message):
     paid_status = row["paid"]
     pass_status = row["status"]
     ticket_type = row["ticket_type"]
-    event_code = row.get("event_code")
+    event_code = row["event_code"] or "-"
 
     if paid_status != "оплатил":
         await message.answer(f"❌ Билет не оплачен.\nТип: {ticket_type}")
@@ -97,7 +97,7 @@ async def process_qr_scan_text(message: Message):
     paid_status = row["paid"]
     pass_status = row["status"]
     ticket_type = row["ticket_type"]
-    event_code = row.get("event_code")
+    event_code = row["event_code"] or "-"
 
     if paid_status != "оплатил":
         await message.answer(f"❌ Билет не оплачен.\nТип: {ticket_type}")
@@ -205,7 +205,9 @@ async def approve_payment(callback: CallbackQuery):
     await set_paid_status_by_id(row_id, "оплатил")
 
     ticket_type = row["ticket_type"]
-    png_bytes = await generate_qr(row_id, ticket_type)  # возвращает bytes
+    event_code = row["event_code"] or "-"   # <-- вместо row.get(...)
+
+    png_bytes = await generate_qr(row_id, ticket_type)
     photo = BufferedInputFile(png_bytes, filename=f"ticket_{row_id}.png")
 
     await callback.bot.send_photo(
@@ -215,9 +217,10 @@ async def approve_payment(callback: CallbackQuery):
             f"🎉 Оплата подтверждена!\n"
             f"Ваш билет #{row_id}\n"
             f"Тип: {ticket_type}\n"
-            f"Мероприятие: {row.get('event_code') or '-'}"
+            f"Мероприятие: {event_code}"
         )
     )
+
     await callback.message.edit_text(f"✅ Подтверждено. QR по билету #{row_id} отправлен пользователю.")
 
 # =========================
