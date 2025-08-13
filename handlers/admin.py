@@ -1,29 +1,34 @@
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, CallbackQuery, FSInputFile, BufferedInputFile
-from aiogram.types import WebAppData, BotCommand, BotCommandScopeChat
+from aiogram.types import (
+    Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
+    FSInputFile, BufferedInputFile, BotCommand, BotCommandScopeChat
+)
 from qr_generator import generate_qr
 from database import (
-    add_user, update_status, get_status,
-    get_paid_status, set_paid_status,
-    count_registered, count_activated,
+    # работа по row_id
+    get_row, get_paid_status_by_id, set_paid_status_by_id,
+    get_status_by_id, update_status_by_id,
+    # отчёты / списки
+    count_registered, count_activated, count_paid,
     get_registered_users, get_paid_users,
-    clear_database, mark_as_paid, count_paid,
-    get_ticket_type
+    # обслуживание
+    clear_database,
 )
 from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK
-from openpyxl import Workbook
 
 router = Router()
 
-# Админ-панель
+# =========================
+# /admin — панель
+# =========================
 @router.message(lambda msg: msg.text == "/admin")
 async def admin_panel(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("🚫 У вас нет доступа к панели администратора.")
         return
-    
+
     await message.bot.set_my_commands([
         BotCommand(command="report", description="📊 Статистика"),
         BotCommand(command="users", description="📋 Список пользователей"),
@@ -31,57 +36,84 @@ async def admin_panel(message: Message):
         BotCommand(command="paid_users", description="💰 Оплатившие пользователи"),
         BotCommand(command="clear_db", description="Очистить базу"),
         BotCommand(command="exit_admin", description="Вернуться в пользовательское меню"),
-    ],
-    scope={"type": "chat", "chat_id": message.from_user.id}
-    )
+    ], scope={"type": "chat", "chat_id": message.from_user.id})
 
     await message.answer("🛡 Вы вошли в режим администратора.")
 
-# Обработка данных из WebApp сканера
+# =========================
+# Сканирование через WebApp
+# Ожидаем payload вида "row_id:ticket_type"
+# =========================
 @router.message(lambda msg: msg.web_app_data is not None)
 async def handle_webapp_data(message: Message):
     try:
-        data = message.web_app_data.data.strip()
-        user_id_str, ticket_type = data.split(":")
-        user_id = int(user_id_str)
-
-        status = await get_status(user_id)
-        if status is None:
-            await message.answer(f"❌ QR-код не найден.\nТип билета: {ticket_type}")
-        elif status == "не активирован":
-            await update_status(user_id, "активирован")
-            await message.answer(f"✅ Пропуск активирован. Удачного мероприятия!\nТип билета: {ticket_type}")
-        else:
-            await message.answer(f"⚠️ Этот QR-код уже был использован.\nТип билета: {ticket_type}")
+        data = (message.web_app_data.data or "").strip()
+        row_id_str, _qr_type = data.split(":", 1)  # тип игнорируем — берём из БД
+        row_id = int(row_id_str)
     except Exception:
-        await message.answer("⚠️ Ошибка чтения QR-кода.")
+        await message.answer("⚠️ Неверный формат QR.")
+        return
 
-# Текстовая команда для сканирования (если сканер выдаёт текст)
+    row = await get_row(row_id)
+    if not row:
+        await message.answer("❌ Билет не найден.")
+        return
+
+    paid_status = row["paid"]
+    pass_status = row["status"]
+    ticket_type = row["ticket_type"]
+    event_code = row.get("event_code")
+
+    if paid_status != "оплатил":
+        await message.answer(f"❌ Билет не оплачен.\nТип: {ticket_type}")
+        return
+
+    if pass_status == "активирован":
+        await message.answer(f"⚠️ Билет уже использован.\nТип: {ticket_type}")
+        return
+
+    await update_status_by_id(row_id, "активирован")
+    extra = f"\nМероприятие: {event_code}" if event_code else ""
+    await message.answer(f"✅ Проход разрешён!\nТип: {ticket_type}{extra}")
+
+# =========================
+# Текстовое сканирование: "QR:<row_id[:что-угодно]>"
+# =========================
 @router.message(F.text.startswith("QR:"))
 async def process_qr_scan_text(message: Message):
     try:
-        data = message.text.replace("QR:", "").strip()
-        user_id_str, ticket_type = data.split(":")
-        user_id = int(user_id_str)
-
-        paid_status = await get_paid_status(user_id)
-        current_status = await get_status(user_id)
-
-        if paid_status != "оплатил":
-            await message.answer(f"❌ Билет не оплачен.\nТип билета: {ticket_type}")
-            return
-
-        if current_status == "активирован":
-            await message.answer(f"⚠️ Билет уже использован!\nТип билета: {ticket_type}")
-            return
-
-        await update_status(user_id, "активирован")
-        await message.answer(f"✅ Проход разрешён!\nТип билета: {ticket_type}")
-
+        raw = message.text.replace("QR:", "").strip()
+        row_id_str = raw.split(":", 1)[0]
+        row_id = int(row_id_str)
     except Exception:
-        await message.answer("⚠️ Ошибка чтения QR-кода.")
+        await message.answer("⚠️ Неверный формат QR.")
+        return
 
-# Статистика
+    row = await get_row(row_id)
+    if not row:
+        await message.answer("❌ Билет не найден.")
+        return
+
+    paid_status = row["paid"]
+    pass_status = row["status"]
+    ticket_type = row["ticket_type"]
+    event_code = row.get("event_code")
+
+    if paid_status != "оплатил":
+        await message.answer(f"❌ Билет не оплачен.\nТип: {ticket_type}")
+        return
+
+    if pass_status == "активирован":
+        await message.answer(f"⚠️ Билет уже использован!\nТип: {ticket_type}")
+        return
+
+    await update_status_by_id(row_id, "активирован")
+    extra = f"\nМероприятие: {event_code}" if event_code else ""
+    await message.answer(f"✅ Проход разрешён!\nТип: {ticket_type}{extra}")
+
+# =========================
+# /report — статистика
+# =========================
 @router.message(lambda msg: msg.text == "/report")
 async def report(message: Message):
     if message.from_user.id not in ADMIN_IDS:
@@ -93,17 +125,19 @@ async def report(message: Message):
     inactive = total - active
     chat_count = await message.bot.get_chat_member_count(CHANNEL_ID)
     paid_count = await count_paid()
-        
+
     await message.answer(
         f"📊 Статистика:\n"
         f"👥 Подписчиков в канале: {chat_count}\n"
-        f"👤 Зарегистрировались в боте: {total}\n"
-        f"💰 Оплатили: {paid_count}\n"
+        f"👤 Создано покупок: {total}\n"
+        f"💰 Оплачено: {paid_count}\n"
         f"✅ Пришли: {active}\n"
         f"❌ Не пришли: {inactive}"
     )
 
-# Список всех пользователей
+# =========================
+# /users — список всех записей
+# =========================
 @router.message(lambda msg: msg.text == "/users")
 async def list_users(message: Message):
     if message.from_user.id not in ADMIN_IDS:
@@ -115,20 +149,22 @@ async def list_users(message: Message):
         await message.answer("Пока никто не зарегистрировался.")
         return
 
-    text = "📄 Зарегистрированные пользователи:\n\n"
+    text = "📄 Записи покупок:\n\n"
     for user_id, username, paid, status in users:
         name = f"@{username}" if username else f"(id: {user_id})"
-        text += f"{name} — {status}\n"
+        text += f"{name} — {status} / {paid}\n"
 
     if len(text) > 4000:
         with open("registered_users.txt", "w", encoding="utf-8") as f:
             f.write(text)
         file = FSInputFile("registered_users.txt")
-        await message.answer_document(file, caption="📄 Список пользователей")
+        await message.answer_document(file, caption="📄 Список покупок")
     else:
         await message.answer(text)
 
-# Выход из режима админа
+# =========================
+# /exit_admin — выйти из режима админа
+# =========================
 @router.message(lambda msg: msg.text == "/exit_admin")
 async def exit_admin_mode(message: Message):
     if message.from_user.id not in ADMIN_IDS:
@@ -142,7 +178,9 @@ async def exit_admin_mode(message: Message):
 
     await message.answer("↩️ Вы вышли из режима администратора. Команды обновлены.")
 
-# Открыть сканер
+# =========================
+# /scanner — открыть веб-сканер
+# =========================
 @router.message(lambda msg: msg.text == "/scanner")
 async def scanner_command(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -150,45 +188,70 @@ async def scanner_command(message: Message):
     ])
     await message.answer("Сканируйте QR-код участника:", reply_markup=keyboard)
 
-# Подтверждение оплаты
-@router.callback_query(F.data.startswith("approve:"))
+# =========================
+# Подтверждение оплаты по row_id
+# =========================
+@router.callback_query(F.data.startswith("approve_row:"))
 async def approve_payment(callback: CallbackQuery):
-    user_id = int(callback.data.split(":")[1])
-    ticket_type = await get_ticket_type(user_id) or "обычный"
+    await callback.answer("Обрабатываю…", show_alert=False)
+    row_id = int(callback.data.split(":")[1])
 
-    await mark_as_paid(user_id)
-    await update_status(user_id, "не активирован")
-    qr_buffer = await generate_qr(user_id, ticket_type)  # BytesIO
-    png_bytes = qr_buffer.getvalue()                     # <- достаём bytes
-    photo = BufferedInputFile(png_bytes, filename=f"ticket_{user_id}.png")
+    row = await get_row(row_id)
+    if not row:
+        await callback.message.edit_text("❌ Запись не найдена.")
+        return
+
+    # ставим оплату и генерим QR
+    await set_paid_status_by_id(row_id, "оплатил")
+
+    ticket_type = row["ticket_type"]
+    png_bytes = await generate_qr(row_id, ticket_type)  # возвращает bytes
+    photo = BufferedInputFile(png_bytes, filename=f"ticket_{row_id}.png")
 
     await callback.bot.send_photo(
-        chat_id=user_id,
+        chat_id=row["user_id"],
         photo=photo,
-        caption=f"🎉 Оплата подтверждена! Вот ваш QR-код.\nТип билета: {ticket_type}"
+        caption=(
+            f"🎉 Оплата подтверждена!\n"
+            f"Ваш билет #{row_id}\n"
+            f"Тип: {ticket_type}\n"
+            f"Мероприятие: {row.get('event_code') or '-'}"
+        )
     )
+    await callback.message.edit_text(f"✅ Подтверждено. QR по билету #{row_id} отправлен пользователю.")
 
-    await callback.message.edit_text(f"✅ Оплата подтверждена, QR отправлен пользователю.\nТип билета: {ticket_type}")
-
-# Отклонение оплаты
-@router.callback_query(F.data.startswith("reject:"))
+# =========================
+# Отклонение оплаты по row_id
+# =========================
+@router.callback_query(F.data.startswith("reject_row:"))
 async def reject_payment(callback: CallbackQuery):
-    user_id = int(callback.data.split(":")[1])
-    await set_paid_status(user_id, "не оплатил")
+    row_id = int(callback.data.split(":")[1])
+    row = await get_row(row_id)
+    if not row:
+        await callback.message.edit_text("❌ Запись не найдена.")
+        return
+
+    await set_paid_status_by_id(row_id, "отклонено")
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплатить", url=PAYMENT_LINK)],
-        [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid:{user_id}")]
+        [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid_row:{row_id}")]
     ])
     await callback.bot.send_message(
-        chat_id=user_id,
-        text="🚫 Оплата не подтверждена. Проверьте платёж или свяжитесь с администратором.",
+        chat_id=row["user_id"],
+        text=(
+            "🚫 Оплата не подтверждена.\n"
+            "Проверьте платёж или свяжитесь с администратором.\n\n"
+            "Если всё исправили — нажмите «Я оплатил»."
+        ),
         reply_markup=kb
     )
 
-    await callback.message.edit_text("❌ Оплата отклонена. Пользователь уведомлён.")
+    await callback.message.edit_text(f"❌ Оплата по билету #{row_id} отклонена. Пользователь уведомлён.")
 
-# Оплатившие пользователи
+# =========================
+# /paid_users — список оплаченных записей
+# =========================
 @router.message(lambda msg: msg.text == "/paid_users")
 async def list_paid_users(message: Message):
     if message.from_user.id not in ADMIN_IDS:
@@ -200,10 +263,10 @@ async def list_paid_users(message: Message):
         await message.answer("❌ Пока никто не оплатил.")
         return
 
-    text = "💰 Оплатившие пользователи:\n\n"
+    text = "💰 Оплаченные покупки:\n\n"
     for user_id, username, status, paid in users:
         name = f"@{username}" if username else f"(id: {user_id})"
-        text += f"{name} — {paid}\n"
+        text += f"{name} — {paid} / {status}\n"
 
     if len(text) > 4000:
         with open("paid_users.txt", "w", encoding="utf-8") as f:
@@ -213,7 +276,9 @@ async def list_paid_users(message: Message):
     else:
         await message.answer(text)
 
-# Очистка базы
+# =========================
+# Очистка базы (с паролем)
+# =========================
 class ClearDBStates(StatesGroup):
     waiting_for_password = State()
 
@@ -228,7 +293,7 @@ async def start_clear_db(message: Message, state: FSMContext):
 
 @router.message(ClearDBStates.waiting_for_password)
 async def process_password(message: Message, state: FSMContext):
-    PASSWORD = "12345"
+    PASSWORD = "12345"  # замени на свой
     if message.text == PASSWORD:
         await clear_database()
         await message.answer("✅ База данных успешно очищена.")

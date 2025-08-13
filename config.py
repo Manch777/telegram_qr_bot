@@ -13,3 +13,4 @@ POSTGRES_URL = os.getenv("POSTGRES_URL")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 _raw_promocodes = os.getenv("PROMOCODES", "")
 PROMOCODES = [c.strip().upper() for c in _raw_promocodes.split(",") if c.strip()]
+EVENT_CODE = os.getenv("EVENT_CODE", "default_event")

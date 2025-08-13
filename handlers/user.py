@@ -1,24 +1,25 @@
+# handlers/user.py
 from aiogram import Router, F
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.filters import CommandStart
-from config import CHANNEL_ID, INSTAGRAM_LINK, ADMIN_IDS, PAYMENT_LINK, PROMOCODES
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
+
+from config import CHANNEL_ID, PAYMENT_LINK, PROMOCODES, EVENT_CODE, ADMIN_IDS
 from database import (
-    add_user, update_status, get_status,
-    get_paid_status, set_paid_status,
-    count_registered, count_activated,
-    get_registered_users, get_paid_users,
-    clear_database, count_ticket_type, set_ticket_type
+    add_user,                               # -> возвращает row_id (id строки покупки)
+    get_paid_status_by_id, set_paid_status_by_id,
+    count_ticket_type_paid_for_event,
 )
-from qr_generator import generate_qr
 
 router = Router()
 
-# Список промокодов
-PROMOCODES = ["PROMO2025", "DISCOUNT50", "FREEENTRY"]
+# Локальный флаг ожидания промокода (без FSM, чтобы не трогать main.py)
+_AWAIT_PROMO = set()   # set[int] of user_id
 
+
+# /start: приветствие + 2 кнопки
 @router.message(CommandStart())
 async def start_command(message: Message):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подписаться на Telegram", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}")],
         [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
     ])
@@ -27,7 +28,8 @@ async def start_command(message: Message):
         "Теперь ты точно знаешь, где лучшие тусовки\n\n"
         "Выбери, что хочешь сделать 👇"
     )
-    await message.answer(text, reply_markup=keyboard)
+    await message.answer(text, reply_markup=kb)
+
 
 # Меню выбора билета
 @router.callback_query(F.data == "buy_ticket_menu")
@@ -39,31 +41,44 @@ async def ticket_menu(callback: CallbackQuery):
     ])
     await callback.message.answer("Выбери тип билета:", reply_markup=kb)
 
-# 1+1 билет
+
+# Билет 1+1 (лимит 5 оплаченных на текущее мероприятие)
 @router.callback_query(F.data == "ticket_1plus1")
 async def buy_1plus1(callback: CallbackQuery):
-    count = await count_ticket_type("1+1")
-    if count >= 5:
-        await callback.message.answer("❌ Акция '1+1' больше недоступна, лимит в 5 продаж исчерпан.")
+    paid_count = await count_ticket_type_paid_for_event(EVENT_CODE, "1+1")
+    if paid_count >= 5:
+        await callback.message.answer("❌ Акция '1+1' больше недоступна (лимит 5 продаж на это мероприятие).")
         return
-    await process_payment(callback, "1+1")
+    await _present_payment(callback, ticket_type="1+1")
+
 
 # 1 билет
 @router.callback_query(F.data == "ticket_single")
 async def buy_single(callback: CallbackQuery):
-    await process_payment(callback, "single")
+    await _present_payment(callback, ticket_type="single")
 
-# Промокод
+
+# Промокод — запрос ввода
 @router.callback_query(F.data == "ticket_promocode")
 async def ask_promocode(callback: CallbackQuery):
-    await callback.message.answer("Введите ваш промокод:")
-    # Сохраним состояние пользователя, чтобы поймать ввод
-    await update_status(callback.from_user.id, "waiting_promocode")
+    _AWAIT_PROMO.add(callback.from_user.id)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="promo_cancel")]
+    ])
+    await callback.message.answer("Введите ваш промокод одним сообщением:", reply_markup=kb)
 
+
+# Отмена ожидания промокода
+@router.callback_query(F.data == "promo_cancel")
+async def cancel_promocode(callback: CallbackQuery):
+    _AWAIT_PROMO.discard(callback.from_user.id)
+    await callback.message.answer("Отменено. Вернитесь в меню: /start")
+
+
+# Ловим ввод промокода (игнорируем команды)
 @router.message(F.text & ~F.text.startswith("/"))
 async def handle_promocode(message: Message):
-    status = await get_status(message.from_user.id)
-    if status != "waiting_promocode":
+    if message.from_user.id not in _AWAIT_PROMO:
         return
 
     code = (message.text or "").strip().upper()
@@ -71,78 +86,68 @@ async def handle_promocode(message: Message):
         await message.answer("❌ Неверный промокод. Попробуйте снова или нажмите /start.")
         return
 
-    # фиксируем тип билета и возвращаем статус в норму
-    await set_ticket_type(message.from_user.id, "promocode")
-    await update_status(message.from_user.id, "не активирован")
+    # Успех — больше не ждём код
+    _AWAIT_PROMO.discard(message.from_user.id)
+    await _present_payment(message, ticket_type="promocode", from_message=True)
 
-    # продолжаем оплату как раньше
-    await process_payment(message, "promocode", from_message=True)
 
-# Универсальная функция оплаты
-async def process_payment(callback_or_message, ticket_type, from_message=False):
-    user_id = callback_or_message.from_user.id
-    username = callback_or_message.from_user.username or "Без ника"
+# Общая функция показа оплаты — СОЗДАЁТ новую запись (новую покупку) и даёт кнопку "Я оплатил"
+async def _present_payment(obj, ticket_type: str, from_message: bool = False):
+    user = obj.from_user
+    user_id = user.id
+    username = user.username or "Без ника"
 
-    # Проверка статуса оплаты
-    paid_status = await get_paid_status(user_id)
-    if paid_status == "оплатил":
-        if from_message:
-            await callback_or_message.answer("✅ Вы уже оплатили. QR-код был отправлен ранее.")
-        else:
-            await callback_or_message.answer("✅ Вы уже оплатили. QR-код был отправлен ранее.", show_alert=True)
-        return
-
-    # Добавляем пользователя и тип билета в БД
-    await add_user(user_id, username)
-    await set_ticket_type(user_id, ticket_type)
+    # Каждая покупка = новая строка в БД
+    row_id = await add_user(user_id=user_id, username=username, event_code=EVENT_CODE, ticket_type=ticket_type)
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплатить", url=PAYMENT_LINK)],
-        [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid:{user_id}")]
+        [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid_row:{row_id}")]
     ])
     text = (
-        f"Вы выбрали билет: {ticket_type}\n"
-        "Стоимость — 250 руб (или скидка по акции/промокоду)\n\n"
-        "❗️ Не забудьте в комментариях платежа указать свой ник в Telegram."
+        f"Вы выбрали: {ticket_type}\n"
+        f"Мероприятие: {EVENT_CODE}\n\n"
+        "После оплаты нажмите «Я оплатил».\n"
+        "❗️В комментариях платежа укажите свой Telegram-ник."
     )
     if from_message:
-        await callback_or_message.answer(text, reply_markup=kb)
+        await obj.answer(text, reply_markup=kb)
     else:
-        await callback_or_message.message.answer(text, reply_markup=kb)
+        await obj.message.answer(text, reply_markup=kb)
 
-# Подтверждение оплаты пользователем
-@router.callback_query(F.data.startswith("paid:"))
+
+# Пользователь нажимает "Я оплатил" — по КОНКРЕТНОЙ покупке (row_id)
+@router.callback_query(F.data.startswith("paid_row:"))
 async def payment_confirmation(callback: CallbackQuery):
-    user_id = int(callback.data.split(":")[1])
-    username = callback.from_user.username or "Без ника"
+    row_id = int(callback.data.split(":")[1])
 
-    paid_status = await get_paid_status(user_id)
+    paid_status = await get_paid_status_by_id(row_id)
     if paid_status == "оплатил":
-        await callback.answer("✅ Вы уже оплатили. QR-код был отправлен ранее.", show_alert=True)
+        await callback.answer("✅ По этой покупке уже всё подтверждено. QR отправлен ранее.", show_alert=True)
         return
-    elif paid_status == "на проверке":
-        await callback.answer("⏳ Ваша оплата уже на проверке. Пожалуйста, подождите.", show_alert=True)
+    if paid_status == "на проверке":
+        await callback.answer("⏳ Уже на проверке. Пожалуйста, подождите.", show_alert=True)
         return
 
-    await set_paid_status(user_id, "на проверке")
+    # Ставим флаг "на проверке" только для ЭТОЙ покупки
+    await set_paid_status_by_id(row_id, "на проверке")
     await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer("⏳ Ваше подтверждение отправлено администратору. Ожидайте одобрения.")
+    await callback.message.answer("⏳ Подтверждение отправлено администратору. Ожидайте одобрения.")
 
-    ticket_type = await get_status(user_id)  # предполагается, что get_status теперь возвращает ticket_type
+    # Уведомляем админов с коллбэками по row_id
+    kb_admin = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"approve_row:{row_id}")],
+        [InlineKeyboardButton(text="❌ Не подтверждена",   callback_data=f"reject_row:{row_id}")]
+    ])
     for admin_id in ADMIN_IDS:
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"approve:{user_id}")],
-            [InlineKeyboardButton(text="❌ Не подтверждена", callback_data=f"reject:{user_id}")]
-        ])
         await callback.bot.send_message(
             chat_id=admin_id,
-            text=f"💰 Пользователь @{username} подтвердил оплату.\nТип билета: {ticket_type}",
-            reply_markup=kb
+            text=f"💰 Подтверждение оплаты по покупке #{row_id}\nМероприятие: {EVENT_CODE}",
+            reply_markup=kb_admin
         )
 
-@router.message(lambda msg: msg.text == "/help")
+
+# /help
+@router.message(lambda m: m.text == "/help")
 async def help_command(message: Message):
-    await message.answer(
-        "ℹ️ Если у вас возникли вопросы или проблемы, пожалуйста, обратитесь к администратору:\n"
-        "@Manch7"
-    )
+    await message.answer("ℹ️ Если у вас возникли вопросы — @Manch7")

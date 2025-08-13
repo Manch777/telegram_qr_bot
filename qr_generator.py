@@ -1,15 +1,16 @@
+# qr_generator.py
 import qrcode
 from io import BytesIO
 
-async def generate_qr(user_id: int, ticket_type: str):
+async def generate_qr(row_id: int, ticket_type: str) -> bytes:
     """
-    Генерирует QR-код с данными в формате "user_id:ticket_type".
+    Генерирует PNG-байты QR-кода.
+    Полезная нагрузка: "row_id:ticket_type" (например: "123:single").
+    Верификацию типа на входе не делаем — на сканировании используем тип из БД.
     """
-    qr_data = f"{user_id}:{ticket_type}"
-    qr_img = qrcode.make(qr_data)
+    payload = f"{row_id}:{ticket_type}"
+    img = qrcode.make(payload)
 
-    buffer = BytesIO()
-    qr_img.save(buffer, format="PNG")
-    buffer.seek(0)
-    return buffer
-
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()  # возвращаем bytes
