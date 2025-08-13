@@ -164,7 +164,7 @@ async def approve_payment(callback: CallbackQuery):
 
     await callback.bot.send_photo(
         chat_id=user_id,
-        photo=qr_file,
+        photo=photo,
         caption=f"🎉 Оплата подтверждена! Вот ваш QR-код.\nТип билета: {ticket_type}"
     )
 
