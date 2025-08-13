@@ -1,7 +1,7 @@
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, CallbackQuery, FSInputFile
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo, CallbackQuery, FSInputFile, BufferedInputFile
 from aiogram.types import WebAppData, BotCommand, BotCommandScopeChat
 from qr_generator import generate_qr
 from database import (
@@ -158,8 +158,9 @@ async def approve_payment(callback: CallbackQuery):
 
     await mark_as_paid(user_id)
     await update_status(user_id, "не активирован")
-    qr_buffer = await generate_qr(user_id, ticket_type)
-    qr_file = FSInputFile(qr_buffer, filename="ticket.png")
+    qr_buffer = await generate_qr(user_id, ticket_type)  # BytesIO
+    png_bytes = qr_buffer.getvalue()                     # <- достаём bytes
+    photo = BufferedInputFile(png_bytes, filename=f"ticket_{user_id}.png")
 
     await callback.bot.send_photo(
         chat_id=user_id,
