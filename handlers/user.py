@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import FSInputFile, Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, WebAppInfo
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.filters import CommandStart
 from config import CHANNEL_ID, INSTAGRAM_LINK, ADMIN_IDS, PAYMENT_LINK
 from database import (
@@ -7,81 +7,108 @@ from database import (
     get_paid_status, set_paid_status,
     count_registered, count_activated,
     get_registered_users, get_paid_users,
-    clear_database
+    clear_database, count_ticket_type, set_ticket_type
 )
 from qr_generator import generate_qr
 
 router = Router()
 
+# Список промокодов
+PROMOCODES = ["PROMO2025", "DISCOUNT50", "FREEENTRY"]
+
 @router.message(CommandStart())
 async def start_command(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подписаться на Telegram", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}")],
-        [InlineKeyboardButton(text="📷 Подписаться на Instagram", url=INSTAGRAM_LINK)],
-        [InlineKeyboardButton(text="🔍 Проверить подписку", callback_data="check_subscription")]
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
     ])
     text = (
-    "Хей! Приветствуем тебя в ЖАЖДА community 🖤\n"
-    "Теперь ты точно знаешь, где лучшие тусовки\n\n"
-    "Подпишись на наши каналы, чтобы получить проходку со скидкой 👇"
+        "Хей! Приветствуем тебя в ЖАЖДА community 🖤\n"
+        "Теперь ты точно знаешь, где лучшие тусовки\n\n"
+        "Выбери, что хочешь сделать 👇"
     )
-
     await message.answer(text, reply_markup=keyboard)
 
+# Меню выбора билета
+@router.callback_query(F.data == "buy_ticket_menu")
+async def ticket_menu(callback: CallbackQuery):
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎫 Билет 1+1", callback_data="ticket_1plus1")],
+        [InlineKeyboardButton(text="🎫 1 билет", callback_data="ticket_single")],
+        [InlineKeyboardButton(text="🎟 У меня есть промокод", callback_data="ticket_promocode")]
+    ])
+    await callback.message.answer("Выбери тип билета:", reply_markup=kb)
 
-@router.callback_query(F.data == "check_subscription")
-async def check_subscription(callback: CallbackQuery):
-    user = callback.from_user
-    user_id = user.id
-    username = user.username
-
-    # проверка подписки
-    member = await callback.bot.get_chat_member(CHANNEL_ID, user_id)
-
-    if member.status not in ["member", "administrator", "creator"]:
-        await callback.message.answer("❌ Вы ещё не подписаны на Telegram-канал!")
+# 1+1 билет
+@router.callback_query(F.data == "ticket_1plus1")
+async def buy_1plus1(callback: CallbackQuery):
+    count = await count_ticket_type("1+1")
+    if count >= 5:
+        await callback.message.answer("❌ Акция '1+1' больше недоступна, лимит в 5 продаж исчерпан.")
         return
-    
+    await process_payment(callback, "1+1")
 
-    # проверка, получал ли уже QR
-    status = await get_status(user_id)
-    paid_status = await get_paid_status(user_id)  # добавим эту функцию
+# 1 билет
+@router.callback_query(F.data == "ticket_single")
+async def buy_single(callback: CallbackQuery):
+    await process_payment(callback, "single")
 
-    if status is not None:
-        # Если уже был добавлен
-        if paid_status == "оплатил":
-            await callback.message.answer("⚠️ Вы уже получали QR-код ранее. Повторная выдача невозможна.")
-        elif paid_status == "на проверке":
-            await callback.message.answer("💳 Оплата на проверке. Ожидайте подтверждения и получения QR-кода.")
+# Промокод
+@router.callback_query(F.data == "ticket_promocode")
+async def ask_promocode(callback: CallbackQuery):
+    await callback.message.answer("Введите ваш промокод:")
+    # Сохраним состояние пользователя, чтобы поймать ввод
+    await update_status(callback.from_user.id, "waiting_promocode")
+
+@router.message(lambda msg: True)
+async def handle_promocode(message: Message):
+    status = await get_status(message.from_user.id)
+    if status == "waiting_promocode":
+        code = message.text.strip()
+        if code not in PROMOCODES:
+            await message.answer("❌ Неверный промокод. Попробуйте снова.")
+            return
+        await process_payment(message, "promocode", from_message=True)
+
+# Универсальная функция оплаты
+async def process_payment(callback_or_message, ticket_type, from_message=False):
+    user_id = callback_or_message.from_user.id
+    username = callback_or_message.from_user.username or "Без ника"
+
+    # Проверка статуса оплаты
+    paid_status = await get_paid_status(user_id)
+    if paid_status == "оплатил":
+        if from_message:
+            await callback_or_message.answer("✅ Вы уже оплатили. QR-код был отправлен ранее.")
         else:
-            await callback.message.answer("❗️ Для получения QR-кода необходимо оплатить участие.")
+            await callback_or_message.answer("✅ Вы уже оплатили. QR-код был отправлен ранее.", show_alert=True)
         return
 
+    # Добавляем пользователя и тип билета в БД
     await add_user(user_id, username)
+    await set_ticket_type(user_id, ticket_type)
 
- # Отправляем кнопку для оплаты
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплатить", url=PAYMENT_LINK)],
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid:{user_id}")]
     ])
-    
-    text_1 = (
-    "Вау! Кажется, ты все сделал правильно ✨\n"
-    "Твоя скидка 50% активирована, стоимость билета - 250 руб\n\n"
-    "❗️Не забудь в комментариях платежа указать свой ник в telegram\n\n"
-    "Ну что, готов оплатить?"
+    text = (
+        f"Вы выбрали билет: {ticket_type}\n"
+        "Стоимость — 250 руб (или скидка по акции/промокоду)\n\n"
+        "❗️ Не забудьте в комментариях платежа указать свой ник в Telegram."
     )
-    await callback.message.answer(text_1, reply_markup=kb)
+    if from_message:
+        await callback_or_message.answer(text, reply_markup=kb)
+    else:
+        await callback_or_message.message.answer(text, reply_markup=kb)
 
+# Подтверждение оплаты пользователем
 @router.callback_query(F.data.startswith("paid:"))
 async def payment_confirmation(callback: CallbackQuery):
-    user = callback.from_user
     user_id = int(callback.data.split(":")[1])
-    username = user.username or "Без ника"
+    username = callback.from_user.username or "Без ника"
 
-    # Проверка текущего статуса оплаты
     paid_status = await get_paid_status(user_id)
-
     if paid_status == "оплатил":
         await callback.answer("✅ Вы уже оплатили. QR-код был отправлен ранее.", show_alert=True)
         return
@@ -89,15 +116,11 @@ async def payment_confirmation(callback: CallbackQuery):
         await callback.answer("⏳ Ваша оплата уже на проверке. Пожалуйста, подождите.", show_alert=True)
         return
 
-    # Обновляем статус оплаты
-
     await set_paid_status(user_id, "на проверке")
-
-    await callback.message.edit_reply_markup(reply_markup=None)  # Удаляем старые кнопки
-    
+    await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer("⏳ Ваше подтверждение отправлено администратору. Ожидайте одобрения.")
 
-    # Отправка админу уведомления
+    ticket_type = await get_status(user_id)  # предполагается, что get_status теперь возвращает ticket_type
     for admin_id in ADMIN_IDS:
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"approve:{user_id}")],
@@ -105,7 +128,7 @@ async def payment_confirmation(callback: CallbackQuery):
         ])
         await callback.bot.send_message(
             chat_id=admin_id,
-            text=f"💰 Пользователь @{username} подтвердил оплату.",
+            text=f"💰 Пользователь @{username} подтвердил оплату.\nТип билета: {ticket_type}",
             reply_markup=kb
         )
 
@@ -113,5 +136,5 @@ async def payment_confirmation(callback: CallbackQuery):
 async def help_command(message: Message):
     await message.answer(
         "ℹ️ Если у вас возникли вопросы или проблемы, пожалуйста, обратитесь к администратору:\n"
-        "@Manch7\n\n"
+        "@Manch7"
     )

@@ -1,9 +1,15 @@
 import qrcode
+from io import BytesIO
 
-def generate_qr(user_id):
-    data = str(user_id)
-    print(f"📦 Генерируем QR-код со значением: {data}")  # <-- ДОБАВЛЕНО
-    img = qrcode.make(data)
-    path = f"qrs/{user_id}.png"
-    img.save(path)
-    return path
+async def generate_qr(user_id: int, ticket_type: str):
+    """
+    Генерирует QR-код с данными в формате "user_id:ticket_type".
+    """
+    qr_data = f"{user_id}:{ticket_type}"
+    qr_img = qrcode.make(qr_data)
+
+    buffer = BytesIO()
+    qr_img.save(buffer, format="PNG")
+    buffer.seek(0)
+    return buffer
+
