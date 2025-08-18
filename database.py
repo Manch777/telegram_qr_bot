@@ -1,9 +1,10 @@
 # database.py
 from sqlalchemy import (
     Column, String, MetaData, Table, create_engine,
-    BigInteger, Integer, Date, select, desc, text
+    BigInteger, Integer, Date, select, desc, text, DateTime 
 )
 from databases import Database
+from sqlalchemy.sql import func
 from config import POSTGRES_URL
 
 # --- Подключение ---
@@ -23,6 +24,17 @@ users = Table(
     Column("paid", String, default="не оплатил"),                   # не оплатил | на проверке | оплатил | отклонено
     Column("status", String, default="не активирован"),             # не активирован | активирован
     Column("purchase_date", Date, server_default=text("CURRENT_DATE"))  # дата покупки (без времени)
+)
+
+# --- Таблица попыток купить 1+1 при закрытом лимите ---
+one_plus_one_attempts = Table(
+    "one_plus_one_attempts",
+    metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("user_id", BigInteger, nullable=False),
+    Column("username", String),
+    Column("event_code", String, nullable=False),
+    Column("attempted_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
 )
 
 database = Database(POSTGRES_URL)
@@ -182,3 +194,36 @@ async def mark_as_paid(user_id: int):
 async def count_ticket_type(ticket_type: str):
     """Кол-во покупок указанного типа по всем мероприятиям (без учёта статуса оплаты)."""
     return await database.fetch_val("SELECT COUNT(*) FROM users WHERE ticket_type = :t", {"t": ticket_type})
+
+# =============================================================================
+# Попытки купить 1+1
+# =============================================================================
+
+# Логируем попытку купить 1+1 при закрытом лимите
+async def log_one_plus_one_attempt(user_id: int, username: str | None, event_code: str):
+    q = one_plus_one_attempts.insert().values(
+        user_id=user_id,
+        username=username or "Без ника",
+        event_code=event_code,
+    )
+    await database.execute(q)
+
+# Все попытки по мероприятию (полный список)
+async def get_one_plus_one_attempts_for_event(event_code: str):
+    q = one_plus_one_attempts.select().where(one_plus_one_attempts.c.event_code == event_code)\
+        .order_by(one_plus_one_attempts.c.attempted_at.desc())
+    rows = await database.fetch_all(q)
+    return rows  # можно и сразу привести к list[dict], если хочешь
+
+# Уникальные пользователи, которые пытались (с датой последней попытки)
+async def get_unique_one_plus_one_attempters_for_event(event_code: str):
+    q = """
+        SELECT user_id,
+               MAX(username) AS username,     -- последнее известное имя
+               MAX(attempted_at) AS last_try
+        FROM one_plus_one_attempts
+        WHERE event_code = :e
+        GROUP BY user_id
+        ORDER BY last_try DESC
+    """
+    return await database.fetch_all(q, {"e": event_code})

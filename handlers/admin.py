@@ -16,7 +16,7 @@ from database import (
     count_registered, count_activated, count_paid,
     get_registered_users, get_paid_users,
     # обслуживание
-    clear_database,
+    clear_database, get_unique_one_plus_one_attempters_for_event,
 )
 from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
@@ -369,4 +369,37 @@ async def change_event_set_name(message: Message, state: FSMContext):
         f"Текущее: {config.EVENT_CODE}\n\n"
         "Акция 1+1 снова доступна (счётчик считается по текущему названию мероприятия)."
     )
+
+
+
+# =========================
+# Счётчик желающих 1+1
+# =========================
+
+@router.message(lambda msg: msg.text == "/wishers")
+async def list_1plus1_wishers(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("🚫 У вас нет прав для этой команды.")
+        return
+
+    rows = await get_unique_one_plus_one_attempters_for_event(config.EVENT_CODE)
+    if not rows:
+        await message.answer("Пока никто не пытался купить 1+1 после исчерпания лимита.")
+        return
+
+    lines = ["📝 Кто хотел 1+1, но не успел (уникальные пользователи):\n"]
+    for r in rows:
+        uid = r["user_id"]
+        uname = r["username"] or f"id:{uid}"
+        when = r["last_try"].strftime("%Y-%m-%d %H:%M")
+        lines.append(f"• @{uname} (id:{uid}) — {when}")
+
+    text = "\n".join(lines)
+    # если вдруг получится очень длинно — отправим файлом
+    if len(text) > 4000:
+        with open("wishers_1plus1.txt", "w", encoding="utf-8") as f:
+            f.write(text)
+        await message.answer_document(FSInputFile("wishers_1plus1.txt"), caption="📝 Список желающих 1+1")
+    else:
+        await message.answer(text)
 
