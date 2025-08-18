@@ -4,7 +4,7 @@ import config
 from aiogram.filters import CommandStart
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from config import CHANNEL_ID, PAYMENT_LINK, INSTAGRAM_LINK, PROMOCODES, EVENT_CODE, ADMIN_IDS
+from config import CHANNEL_ID, PAYMENT_LINK, INSTAGRAM_LINK, PROMOCODES, ADMIN_IDS
 from database import (
     add_user,  get_row,                             # -> возвращает row_id (id строки покупки)
     get_paid_status_by_id, set_paid_status_by_id,
@@ -100,8 +100,12 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
     username = user.username or "Без ника"
 
     # Каждая покупка = новая строка в БД
-    row_id = await add_user(user_id=user_id, username=username, event_code=EVENT_CODE, ticket_type=ticket_type)
-
+    row_id = await add_user(
+        user_id=user_id,
+        username=username,
+        event_code=config.EVENT_CODE,           # <-- динамическое значение
+        ticket_type=ticket_type
+)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплатить", url=PAYMENT_LINK)],
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid_row:{row_id}")]
