@@ -21,6 +21,7 @@ _AWAIT_PROMO = set()   # set[int] of user_id
 async def start_command(message: Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подписаться на Telegram", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}")],
+        [InlineKeyboardButton(text="📷 Подписаться на Instagram", url=INSTAGRAM_LINK)],
         [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
     ])
     text = (
@@ -142,7 +143,7 @@ async def payment_confirmation(callback: CallbackQuery):
     for admin_id in ADMIN_IDS:
         await callback.bot.send_message(
             chat_id=admin_id,
-            text=f"💰 Подтверждение оплаты по покупке #{row_id}\nМероприятие: {EVENT_CODE}",
+            text=f"💰 Подтверждение оплаты пользователя @{username}\nТип билета: {ticket_type}",
             reply_markup=kb_admin
         )
 
