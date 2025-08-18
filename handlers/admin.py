@@ -51,38 +51,52 @@ async def handle_webapp_data(message: Message):
         await message.answer("⚠️ Пустые данные из сканера.")
         return
 
-    # Совместимый парсинг
-    p = payload
-    if p.lower().startswith("qr:"):
-        p = p[3:].lstrip()
-    if p.lower().startswith("r:"):
-        p = p[2:].lstrip()
-    num_str = p.split(":", 1)[0]
-    try:
-        num = int(num_str)
-    except ValueError:
-        await message.answer("⚠️ Неверный формат QR.")
-        return
-
-    # 1) Старая логика (user_id → последняя покупка)
-    status = await get_status(num)
-    if status is not None:
-        if status == "не активирован":
-            await update_status(num, "активирован")
+    # 1) Старый формат (как раньше): в payload чистое число (user_id)
+    if payload.isdigit():
+        user_id = int(payload)
+        status = await get_status(user_id)
+        if status is None:
+            await message.answer("❌ QR-код не найден.")
+        elif status == "не активирован":
+            await update_status(user_id, "активирован")
             await message.answer("✅ Пропуск активирован. Удачного мероприятия!")
         else:
             await message.answer("⚠️ Этот QR-код уже был использован.")
         return
 
-    # 2) Новая логика по row_id (если прислали row_id)
-    row = await get_row(num)
+    # 2) Совместимость с новым форматом: R:<row_id>, QR:<...>, <row_id>:что-угодно
+    p = payload.lstrip()
+    if p.lower().startswith("qr:"):
+        p = p[3:].lstrip()
+    if p.lower().startswith("r:"):
+        p = p[2:].lstrip()
+
+    num_str = p.split(":", 1)[0]
+    try:
+        candidate = int(num_str)
+    except ValueError:
+        await message.answer("⚠️ Неверный формат QR.")
+        return
+
+    # Сначала попробуем, как раньше, трактовать число как user_id (если сканер всё ещё шлёт user_id с префиксом)
+    status = await get_status(candidate)
+    if status is not None:
+        if status == "не активирован":
+            await update_status(candidate, "активирован")
+            await message.answer("✅ Пропуск активирован. Удачного мероприятия!")
+        else:
+            await message.answer("⚠️ Этот QR-код уже был использован.")
+        return
+
+    # Иначе это row_id — новая схема (одна покупка = одна строка)
+    row = await get_row(candidate)
     if row is None:
         await message.answer("❌ QR-код не найден.")
         return
 
-    status_by_id = await get_status_by_id(num)
+    status_by_id = await get_status_by_id(candidate)
     if status_by_id == "не активирован":
-        await update_status_by_id(num, "активирован")
+        await update_status_by_id(candidate, "активирован")
         await message.answer("✅ Пропуск активирован. Удачного мероприятия!")
     else:
         await message.answer("⚠️ Этот QR-код уже был использован.")
