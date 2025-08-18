@@ -184,24 +184,7 @@ async def scanner_command(message: Message):
     ])
     await message.answer("Сканируйте QR-код участника:", reply_markup=keyboard)
     
-# =========================
-# /change_event — 🔁 Сменить мероприятие
-# =========================
-@router.message(lambda msg: msg.text == "/change_event")
-async def change_event_command(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("🚫 У вас нет доступа к панели администратора.")
-        return
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔁 Сменить мероприятие", callback_data="change_event")],
-    ])
-
-    title = getattr(config, "EVENT_TITLE", config.EVENT_CODE)
-    await message.answer(
-        f"Текущее мероприятие:\n• code: {config.EVENT_CODE}\n• title: {title}",
-        reply_markup=kb
-    )
     
 # =========================
 # Подтверждение оплаты по row_id
