@@ -3,7 +3,7 @@ from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from config import CHANNEL_ID, PAYMENT_LINK, PROMOCODES, EVENT_CODE, ADMIN_IDS
+from config import CHANNEL_ID, PAYMENT_LINK, INSTAGRAM_LINK, PROMOCODES, EVENT_CODE, ADMIN_IDS
 from database import (
     add_user,  get_row,                             # -> возвращает row_id (id строки покупки)
     get_paid_status_by_id, set_paid_status_by_id,

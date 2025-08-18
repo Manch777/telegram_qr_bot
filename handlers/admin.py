@@ -1,4 +1,6 @@
 from aiogram import Router, F
+import config
+import re
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -9,7 +11,7 @@ from qr_generator import generate_qr
 from database import (
     # работа по row_id
     get_row, get_paid_status_by_id, set_paid_status_by_id,
-    get_status_by_id, update_status_by_id,
+    get_status_by_id, update_status_by_id, get_status, update_status,
     # отчёты / списки
     count_registered, count_activated, count_paid,
     get_registered_users, get_paid_users,
@@ -174,6 +176,9 @@ async def exit_admin_mode(message: Message):
 # =========================
 @router.message(lambda msg: msg.text == "/scanner")
 async def scanner_command(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("🚫 У вас нет доступа к панели администратора.")
+        return
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📷 Открыть сканер", url=SCAN_WEBAPP_URL)]
     ])
@@ -183,13 +188,19 @@ async def scanner_command(message: Message):
 # /change_event — 🔁 Сменить мероприятие
 # =========================
 @router.message(lambda msg: msg.text == "/change_event")
-async def scanner_command(message: Message):
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+async def change_event_command(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("🚫 У вас нет доступа к панели администратора.")
+        return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔁 Сменить мероприятие", callback_data="change_event")],
     ])
+
+    title = getattr(config, "EVENT_TITLE", config.EVENT_CODE)
     await message.answer(
-        f"Текущее мероприятие:\n• code: {config.EVENT_CODE}\n• title: {getattr(config, 'EVENT_TITLE', config.EVENT_CODE)}",
-        reply_markup=keyboard
+        f"Текущее мероприятие:\n• code: {config.EVENT_CODE}\n• title: {title}",
+        reply_markup=kb
     )
     
 # =========================
