@@ -88,9 +88,9 @@ async def handle_promocode(message: Message):
         await message.answer("❌ Неверный промокод. Попробуйте снова или нажмите /start.")
         return
 
-    # Успех — больше не ждём код
     _AWAIT_PROMO.discard(message.from_user.id)
-    await _present_payment(message, ticket_type="promocode", from_message=True)
+    # ⬇️ СЮДА: вместо "promocode" пишем сам код
+    await _present_payment(message, ticket_type=code, from_message=True)
 
 
 # Общая функция показа оплаты — СОЗДАЁТ новую запись (новую покупку) и даёт кнопку "Я оплатил"

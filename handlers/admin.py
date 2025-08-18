@@ -213,7 +213,7 @@ async def approve_payment(callback: CallbackQuery):
         photo=photo,
         caption=(
             f"🎉 Оплата подтверждена!\n"
-            f"Ваш билет #{row_id}\n"
+            f"Ваш билет №{row_id}\n"
             f"Тип: {ticket_type}\n"
             f"Мероприятие: {event_code}"
         )
