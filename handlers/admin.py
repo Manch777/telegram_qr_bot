@@ -16,7 +16,7 @@ from database import (
     # обслуживание
     clear_database,
 )
-from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK
+from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
 router = Router()
 
@@ -34,6 +34,7 @@ async def admin_panel(message: Message):
         BotCommand(command="users", description="📋 Список пользователей"),
         BotCommand(command="scanner", description="📷 Открыть сканер"),
         BotCommand(command="paid_users", description="💰 Оплатившие пользователи"),
+        BotCommand(command="change_event", description="🔁 Сменить мероприятие"),
         BotCommand(command="clear_db", description="Очистить базу"),
         BotCommand(command="exit_admin", description="Вернуться в пользовательское меню"),
     ], scope={"type": "chat", "chat_id": message.from_user.id})
@@ -177,7 +178,20 @@ async def scanner_command(message: Message):
         [InlineKeyboardButton(text="📷 Открыть сканер", url=SCAN_WEBAPP_URL)]
     ])
     await message.answer("Сканируйте QR-код участника:", reply_markup=keyboard)
-
+    
+# =========================
+# /change_event — 🔁 Сменить мероприятие
+# =========================
+@router.message(lambda msg: msg.text == "/change_event")
+async def scanner_command(message: Message):
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔁 Сменить мероприятие", callback_data="change_event")],
+    ])
+    await message.answer(
+        f"Текущее мероприятие:\n• code: {config.EVENT_CODE}\n• title: {getattr(config, 'EVENT_TITLE', config.EVENT_CODE)}",
+        reply_markup=keyboard
+    )
+    
 # =========================
 # Подтверждение оплаты по row_id
 # =========================
@@ -293,3 +307,66 @@ async def process_password(message: Message, state: FSMContext):
     else:
         await message.answer("❌ Неверный пароль. Доступ запрещён.")
     await state.clear()
+
+# =========================
+# FSM для смены мероприятия
+# =========================
+
+class ChangeEventStates(StatesGroup):
+    waiting_for_password = State()
+    waiting_for_title = State()
+
+def _slugify_title_as_code(title: str) -> str:
+    # Делаем аккуратный code из произвольной строки (ASCII-only)
+    code = re.sub(r"[^A-Za-z0-9_-]+", "-", title.strip())
+    code = re.sub(r"-{2,}", "-", code).strip("-")
+    if not code:
+        from datetime import date
+        code = f"event-{date.today().isoformat()}"
+    return code.lower()
+
+@router.callback_query(F.data == "change_event")
+async def change_event_start(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await state.set_state(ChangeEventStates.waiting_for_password)
+    await callback.message.answer("🔒 Введите пароль для смены мероприятия:")
+
+@router.message(ChangeEventStates.waiting_for_password)
+async def change_event_check_password(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+    if (message.text or "").strip() != ADMIN_EVENT_PASSWORD:
+        await message.answer("❌ Неверный пароль. Доступ запрещён.")
+        await state.clear()
+        return
+    await state.set_state(ChangeEventStates.waiting_for_title)
+    await message.answer("✍️ Введите *название* мероприятия (отображаемое).", parse_mode="Markdown")
+
+@router.message(ChangeEventStates.waiting_for_title)
+async def change_event_set_title(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    title = (message.text or "").strip()
+    if not title:
+        await message.answer("⚠️ Пустое название. Введите ещё раз или /admin для отмены.")
+        return
+
+    code = _slugify_title_as_code(title)
+
+    # Меняем активное событие "на лету"
+    config.EVENT_TITLE = title
+    config.EVENT_CODE = code
+
+    await state.clear()
+    await message.answer(
+        "✅ Мероприятие обновлено!\n"
+        f"• code: `{code}`\n"
+        f"• title: {title}\n\n"
+        "Акция *1+1* снова доступна для этого мероприятия (лимит 5 оплаченных).",
+        parse_mode="Markdown"
+    )

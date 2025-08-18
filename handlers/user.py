@@ -7,7 +7,7 @@ from config import CHANNEL_ID, PAYMENT_LINK, PROMOCODES, EVENT_CODE, ADMIN_IDS
 from database import (
     add_user,  get_row,                             # -> возвращает row_id (id строки покупки)
     get_paid_status_by_id, set_paid_status_by_id,
-    count_ticket_type_paid_for_event,
+    count_ticket_type_paid_for_event, count_ticket_type_for_event,
 )
 
 router = Router()
@@ -46,13 +46,13 @@ async def ticket_menu(callback: CallbackQuery):
 # Билет 1+1 (лимит 5 оплаченных на текущее мероприятие)
 @router.callback_query(F.data == "ticket_1plus1")
 async def buy_1plus1(callback: CallbackQuery):
-    paid_count = await count_ticket_type_paid_for_event(EVENT_CODE, "1+1")
-    if paid_count >= 5:
-        await callback.message.answer("❌ Акция '1+1' больше недоступна (лимит 5 продаж на это мероприятие).")
+    # лимит 5 продаж на ТЕКУЩЕЕ мероприятие
+    count = await count_ticket_type_for_event(config.EVENT_CODE, "1+1")
+    if count >= 5:
+        await callback.message.answer("❌ Акция '1+1' больше недоступна для этого мероприятия (лимит 5 проданных билетов).")
         return
-    await _present_payment(callback, ticket_type="1+1")
-
-
+    await process_payment(callback, "1+1")
+    
 # 1 билет
 @router.callback_query(F.data == "ticket_single")
 async def buy_single(callback: CallbackQuery):

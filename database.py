@@ -84,6 +84,15 @@ async def count_ticket_type_paid_for_event(event_code: str, ticket_type: str) ->
     """
     return await database.fetch_val(q, {"e": event_code, "t": ticket_type})
 
+async def count_ticket_type_for_event(event_code: str, ticket_type: str) -> int:
+    q = """
+        SELECT COUNT(*)
+        FROM users
+        WHERE event_code = :e
+          AND ticket_type = :t
+          AND paid IN ('оплатил', 'на проверке')
+    """
+    return await database.fetch_val(q, {"e": event_code, "t": ticket_type})
 # =============================================================================
 # Агрегаты / списки (по всем покупкам)
 # =============================================================================
