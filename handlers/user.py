@@ -1,5 +1,6 @@
 # handlers/user.py
 from aiogram import Router, F
+import config
 from aiogram.filters import CommandStart
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
