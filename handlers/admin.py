@@ -5,7 +5,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
-    FSInputFile, BufferedInputFile, BotCommand, BotCommandScopeChat, WebAppInfo
+    FSInputFile, BufferedInputFile, BotCommand, BotCommandScopeChat
 )
 from qr_generator import generate_qr
 from database import (
@@ -180,7 +180,7 @@ async def scanner_command(message: Message):
         await message.answer("🚫 У вас нет доступа к панели администратора.")
         return
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📷 Открыть сканер", web_app=WebAppInfo(url=SCAN_WEBAPP_URL))]
+        [InlineKeyboardButton(text="📷 Открыть сканер", url=SCAN_WEBAPP_URL)]
     ])
     await message.answer("Сканируйте QR-код участника:", reply_markup=keyboard)
     
@@ -386,3 +386,4 @@ async def change_event_set_name(message: Message, state: FSMContext):
         f"Текущее: {config.EVENT_CODE}\n\n"
         "Акция 1+1 снова доступна (счётчик считается по текущему названию мероприятия)."
     )
+
