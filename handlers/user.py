@@ -123,6 +123,7 @@ async def payment_confirmation(callback: CallbackQuery):
     user = callback.from_user
     row_id = int(callback.data.split(":")[1])
     username = user.username or "Без ника"
+    ticket_type = callback.from_ticket_type
 
     paid_status = await get_paid_status_by_id(row_id)
     if paid_status == "оплатил":
