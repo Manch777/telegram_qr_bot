@@ -325,16 +325,25 @@ async def process_password(message: Message, state: FSMContext):
 
 class ChangeEventStates(StatesGroup):
     waiting_for_password = State()
-    waiting_for_title = State()
+    waiting_for_event_name = State()
 
-def _slugify_title_as_code(title: str) -> str:
-    # Делаем аккуратный code из произвольной строки (ASCII-only)
-    code = re.sub(r"[^A-Za-z0-9_-]+", "-", title.strip())
-    code = re.sub(r"-{2,}", "-", code).strip("-")
-    if not code:
-        from datetime import date
-        code = f"event-{date.today().isoformat()}"
-    return code.lower()
+def _normalize_event_name(raw: str) -> str:
+    # Прибираем лишние пробелы, убираем перевод строки по краям
+    return " ".join((raw or "").strip().split())
+
+@router.message(lambda msg: msg.text == "/change_event")
+async def change_event_command(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("🚫 У вас нет доступа к панели администратора.")
+        return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔁 Сменить мероприятие", callback_data="change_event")],
+    ])
+    await message.answer(
+        f"Текущее мероприятие: {config.EVENT_CODE}",
+        reply_markup=kb
+    )
 
 @router.callback_query(F.data == "change_event")
 async def change_event_start(callback: CallbackQuery, state: FSMContext):
@@ -353,31 +362,27 @@ async def change_event_check_password(message: Message, state: FSMContext):
         await message.answer("❌ Неверный пароль. Доступ запрещён.")
         await state.clear()
         return
-    await state.set_state(ChangeEventStates.waiting_for_title)
-    await message.answer("✍️ Введите *название* мероприятия (отображаемое).", parse_mode="Markdown")
 
-@router.message(ChangeEventStates.waiting_for_title)
-async def change_event_set_title(message: Message, state: FSMContext):
+    await state.set_state(ChangeEventStates.waiting_for_event_name)
+    await message.answer("✍️ Введите *название мероприятия* (видно пользователям).", parse_mode="Markdown")
+
+@router.message(ChangeEventStates.waiting_for_event_name)
+async def change_event_set_name(message: Message, state: FSMContext):
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
         return
 
-    title = (message.text or "").strip()
+    title = _normalize_event_name(message.text)
     if not title:
         await message.answer("⚠️ Пустое название. Введите ещё раз или /admin для отмены.")
         return
 
-    code = _slugify_title_as_code(title)
-
-    # Меняем активное событие "на лету"
-    config.EVENT_TITLE = title
-    config.EVENT_CODE = code
+    # Устанавливаем одно поле — оно и «код», и «название»
+    config.EVENT_CODE = title
 
     await state.clear()
     await message.answer(
         "✅ Мероприятие обновлено!\n"
-        f"• code: `{code}`\n"
-        f"• title: {title}\n\n"
-        "Акция *1+1* снова доступна для этого мероприятия (лимит 5 оплаченных).",
-        parse_mode="Markdown"
+        f"Текущее: {config.EVENT_CODE}\n\n"
+        "Акция 1+1 снова доступна (счётчик считается по текущему названию мероприятия)."
     )
