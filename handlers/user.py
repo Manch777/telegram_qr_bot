@@ -118,34 +118,51 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
 
 
 # Пользователь нажимает "Я оплатил" — по КОНКРЕТНОЙ покупке (row_id)
-@router.callback_query(F.data.startswith("paid_row:"))
+@router.callback_query(F.data.startswith("paid:"))
 async def payment_confirmation(callback: CallbackQuery):
-    row_id = int(callback.data.split(":")[1])
+    user_id = int(callback.data.split(":")[1])
 
-    paid_status = await get_paid_status_by_id(row_id)
+    # Имя/ник для сообщений
+    tg_username = callback.from_user.username
+    username = tg_username or "Без ника"  # для текста
+    mention = f"@{tg_username}" if tg_username else callback.from_user.full_name
+
+    # Тип билета (из последней покупки этого пользователя — legacy-обёртка)
+    ticket_type = await get_ticket_type(user_id) or "-"
+
+    # Проверка текущего статуса оплаты
+    paid_status = await get_paid_status(user_id)
     if paid_status == "оплатил":
-        await callback.answer("✅ По этой покупке уже всё подтверждено. QR отправлен ранее.", show_alert=True)
+        await callback.answer("✅ Вы уже оплатили. QR-код был отправлен ранее.", show_alert=True)
         return
     if paid_status == "на проверке":
-        await callback.answer("⏳ Уже на проверке. Пожалуйста, подождите.", show_alert=True)
+        await callback.answer("⏳ Ваша оплата уже на проверке. Пожалуйста, подождите.", show_alert=True)
         return
 
-    # Ставим флаг "на проверке" только для ЭТОЙ покупки
-    await set_paid_status_by_id(row_id, "на проверке")
-    await callback.message.edit_reply_markup(reply_markup=None)
-    await callback.message.answer("⏳ Подтверждение отправлено администратору. Ожидайте одобрения.")
+    # Ставим "на проверке"
+    await set_paid_status(user_id, "на проверке")
 
-    # Уведомляем админов с коллбэками по row_id
-    kb_admin = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"approve_row:{row_id}")],
-        [InlineKeyboardButton(text="❌ Не подтверждена",   callback_data=f"reject_row:{row_id}")]
+    # Уберём старые кнопки у пользователя
+    await callback.message.edit_reply_markup(reply_markup=None)
+    await callback.message.answer("⏳ Ваше подтверждение отправлено администратору. Ожидайте одобрения.")
+
+    # Кнопки для администратора
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"approve:{user_id}")],
+        [InlineKeyboardButton(text="❌ Не подтверждена",     callback_data=f"reject:{user_id}")]
     ])
+
+    # Уведомление администраторам
     for admin_id in ADMIN_IDS:
         await callback.bot.send_message(
             chat_id=admin_id,
-            text=f"💰 Подтверждение оплаты пользователя @{username}\nТип билета: {ticket_type}",
-            reply_markup=kb_admin
+            text=(
+                f"💰 Подтверждение оплаты от {mention}\n"
+                f"Тип билета: {ticket_type}"
+            ),
+            reply_markup=kb
         )
+
 
 
 # /help
