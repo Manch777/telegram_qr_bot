@@ -50,9 +50,9 @@ async def buy_1plus1(callback: CallbackQuery):
     # лимит 5 продаж на ТЕКУЩЕЕ мероприятие
     count = await count_ticket_type_for_event(config.EVENT_CODE, "1+1")
     if count >= 5:
-        await callback.message.answer("❌ Акция '1+1' больше недоступна для этого мероприятия (лимит 5 проданных билетов).")
+        await callback.message.answer("❌ Акция '1+1' больше недоступна для этого мероприятия.")
         return
-    await process_payment(callback, "1+1")
+    await _present_payment(callback, ticket_type="1+1")
     
 # 1 билет
 @router.callback_query(F.data == "ticket_single")
