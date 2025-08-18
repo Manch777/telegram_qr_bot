@@ -5,7 +5,7 @@ from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, C
 
 from config import CHANNEL_ID, PAYMENT_LINK, PROMOCODES, EVENT_CODE, ADMIN_IDS
 from database import (
-    add_user,                               # -> возвращает row_id (id строки покупки)
+    add_user,  get_row,                             # -> возвращает row_id (id строки покупки)
     get_paid_status_by_id, set_paid_status_by_id,
     count_ticket_type_paid_for_event,
 )
