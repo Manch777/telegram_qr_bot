@@ -18,53 +18,55 @@ dp = Dispatcher()
 # /start <payload> — deep-link обработчик
 # Поддерживаем:
 #   - "R:<row_id>"
-#   - "<row_id>"
-#   - "<row_id>:<что-угодно>"
-#   - "QR:R:<row_id>" или "QR:<row_id>[:...]"
 async def deep_link_start_handler(message: Message):
     parts = message.text.split(maxsplit=1)
     if len(parts) != 2:
         return
 
-    payload = parts[1].strip()
+    payload = (parts[1] or "").strip()
+    if not payload:
+        await message.answer("❌ Недопустимый QR-код.")
+        return
 
-    # снимаем возможные префиксы
+    # Совместимый парсинг: убираем префиксы и «хвост» после двоеточия
     p = payload
     if p.lower().startswith("qr:"):
         p = p[3:].lstrip()
     if p.lower().startswith("r:"):
         p = p[2:].lstrip()
-
-    # берём число до первого двоеточия
     num_str = p.split(":", 1)[0]
+
     try:
-        num = int(num_str)
+        candidate = int(num_str)
     except ValueError:
         await message.answer("❌ Недопустимый QR-код.")
         return
 
-    # 1) Сначала — старая логика (user_id → последняя покупка)
-    status = await get_status(num)
+    # 1) СТАРЫЙ QR: число = user_id (берём последнюю покупку пользователя)
+    status = await get_status(candidate)
     if status is not None:
+        ticket_type = await get_ticket_type(candidate) or "-"
         if status == "не активирован":
-            await update_status(num, "активирован")
-            await message.answer("✅ Пропуск активирован. Добро пожаловать!")
+            await update_status(candidate, "активирован")
+            await message.answer(f"✅ Пропуск активирован.\nТип билета: {ticket_type}")
         else:
-            await message.answer("⚠️ Этот QR-код уже использован.")
+            await message.answer(f"⚠️ Этот QR-код уже использован.\nТип билета: {ticket_type}")
         return
 
-    # 2) Фоллбэк — новая логика по row_id (если прислали row_id)
-    row = await get_row(num)
+    # 2) НОВЫЙ QR: число = row_id (одна строка = один билет)
+    row = await get_row(candidate)
     if row is None:
         await message.answer("❌ QR-код не найден.")
         return
 
-    status_by_id = await get_status_by_id(num)
+    ticket_type = row["ticket_type"] or "-"
+    status_by_id = row["status"]  # можно и await get_status_by_id(candidate)
+
     if status_by_id == "не активирован":
-        await update_status_by_id(num, "активирован")
-        await message.answer("✅ Пропуск активирован. Добро пожаловать!")
+        await update_status_by_id(candidate, "активирован")
+        await message.answer(f"✅ Пропуск активирован.\nТип билета: {ticket_type}")
     else:
-        await message.answer("⚠️ Этот QR-код уже использован.")
+        await message.answer(f"⚠️ Этот QR-код уже использован.\nТип билета: {ticket_type}")
 
 # Регистрация роутеров (важен порядок: админ выше пользователя)
 dp.include_router(admin.router)
