@@ -73,7 +73,7 @@ dp.include_router(admin.router)
 dp.include_router(user.router)
 
 # Регистрируем deep-link обработчик
-dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.text.len() > 7)
+dp.message.register(deep_link_start_handler, F.text.startswith("") & F.text.len() > 7)
 
 
 async def on_startup(app: web.Application):
