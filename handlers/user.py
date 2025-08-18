@@ -112,7 +112,7 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
     ])
     text = (
         f"Вы выбрали: {ticket_type}\n"
-        f"Мероприятие: {EVENT_CODE}\n\n"
+        f"Мероприятие: {config.EVENT_CODE}\n\n"
         "После оплаты нажмите «Я оплатил».\n"
         "❗️В комментариях платежа укажите свой Telegram-ник."
     )
