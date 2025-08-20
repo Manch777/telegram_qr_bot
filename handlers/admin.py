@@ -617,7 +617,7 @@ async def broadcast_last_check_password(message: Message, state: FSMContext):
 
     await state.clear()
     # запускаем рассылку
-    await _broadcast_last_post_to_all(message)
+    await _broadcast_last_post(message)
     
 LAST_POST_KEY = "last_channel_post_id"
 
