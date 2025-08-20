@@ -7,7 +7,13 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 INSTAGRAM_LINK = os.getenv("INSTAGRAM_LINK")
 SCAN_WEBAPP_URL = os.getenv("SCAN_WEBAPP_URL")
-ADMIN_IDS = [int(id_) for id_ in os.getenv("ADMIN_IDS", "").split(",") if id_]
+
+def _parse_ids(s: str):
+    return [int(x) for x in (s or "").replace(" ", "").split(",") if x]
+
+ADMIN_IDS = _parse_ids(os.getenv("ADMIN_IDS"))
+SCANNER_ADMIN_IDS = _parse_ids(os.getenv("SCANNER_ADMIN_IDS"))
+
 PAYMENTS_ADMIN_ID = int(os.getenv("PAYMENTS_ADMIN_ID", "0")) or None
 PAYMENT_LINK = os.getenv("PAYMENT_LINK")
 POSTGRES_URL = os.getenv("POSTGRES_URL")

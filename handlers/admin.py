@@ -1,7 +1,7 @@
 from aiogram import Router, F
 import config
 import asyncio
-from config import PAYMENTS_ADMIN_ID
+from config import PAYMENTS_ADMIN_ID, SCANNER_ADMIN_IDS
 import re
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -25,32 +25,56 @@ from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK, ADMIN_E
 
 router = Router()
 
+
+def is_full_admin(uid: int) -> bool:
+    return uid in ADMIN_IDS
+
+def is_scanner_admin(uid: int) -> bool:
+    # сканер-доступ у сканер-админов и у полноценных админов
+    return uid in SCANNER_ADMIN_IDS or uid in ADMIN_IDS
+
 # =========================
 # /admin — панель
 # =========================
 @router.message(lambda msg: msg.text == "/admin")
 async def admin_panel(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("🚫 У вас нет доступа к панели администратора.")
+    uid = message.from_user.id
+
+    if is_full_admin(uid):
+
+        await message.bot.set_my_commands([
+            BotCommand(command="report", description="📊 Статистика"),
+            BotCommand(command="users", description="📋 Список пользователей"),
+            BotCommand(command="scanner", description="📷 Открыть сканер"),
+            BotCommand(command="paid_users", description="💰 Оплатившие пользователи"),
+            BotCommand(command="change_event", description="🔁 Сменить мероприятие"),
+            BotCommand(command="broadcast_last", description="📣 Разослать последний пост"),  # <-- добавили
+            BotCommand(command="wishers", description="📝 Кто хотел 1+1"),        
+            BotCommand(command="clear_db", description="Очистить базу"),
+            BotCommand(command="exit_admin", description="Вернуться в пользовательское меню"),
+        ], scope={"type": "chat", "chat_id": message.from_user.id})
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📣 Разослать последний пост", callback_data="broadcast_last")]
+        ])
+        await message.answer("🛡 Режим администратора включён.")
+        return
+    
+    if uid in SCANNER_ADMIN_IDS:
+        # Только сканер
+        await message.bot.set_my_commands([
+            BotCommand(command="scanner", description="📷 Открыть сканер"),
+            BotCommand(command="exit_admin", description="Вернуться в пользовательское меню"),
+        ], scope={"type": "chat", "chat_id": uid})
+
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📷 Открыть сканер", url=SCAN_WEBAPP_URL)]
+        ])
+        await message.answer("🛡 Режим сканера включён.", reply_markup=kb)
         return
 
-    await message.bot.set_my_commands([
-        BotCommand(command="report", description="📊 Статистика"),
-        BotCommand(command="users", description="📋 Список пользователей"),
-        BotCommand(command="scanner", description="📷 Открыть сканер"),
-        BotCommand(command="paid_users", description="💰 Оплатившие пользователи"),
-        BotCommand(command="change_event", description="🔁 Сменить мероприятие"),
-        BotCommand(command="broadcast_last", description="📣 Разослать последний пост"),  # <-- добавили
-        BotCommand(command="wishers", description="📝 Кто хотел 1+1"),        
-        BotCommand(command="clear_db", description="Очистить базу"),
-        BotCommand(command="exit_admin", description="Вернуться в пользовательское меню"),
-    ], scope={"type": "chat", "chat_id": message.from_user.id})
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📣 Разослать последний пост", callback_data="broadcast_last")]
-    ])
-    
-    await message.answer("🛡 Вы вошли в режим администратора.")
+    await message.answer("🚫 У вас нет доступа к панели администратора.")
 
 # =========================
 # Сканирование через WebApp
@@ -58,6 +82,9 @@ async def admin_panel(message: Message):
 # =========================
 @router.message(lambda msg: msg.web_app_data is not None)
 async def handle_webapp_data(message: Message):
+    if not is_scanner_admin(message.from_user.id):
+        await message.answer("🚫 Нет прав на сканирование.")
+        return
     payload = (message.web_app_data.data or "").strip()
     if not payload:
         await message.answer("⚠️ Пустые данные из сканера.")
@@ -185,14 +212,14 @@ async def exit_admin_mode(message: Message):
 # =========================
 @router.message(lambda msg: msg.text == "/scanner")
 async def scanner_command(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("🚫 У вас нет доступа к панели администратора.")
+    if not is_scanner_admin(message.from_user.id):
+        await message.answer("🚫 Нет прав на использование сканера.")
         return
+
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📷 Открыть сканер", url=SCAN_WEBAPP_URL)]
     ])
-    await message.answer("Сканируйте QR-код участника:", reply_markup=keyboard)
-    
+    await message.answer("Сканируйте QR-код участника:", reply_markup=keyboard)    
 
     
 # =========================
