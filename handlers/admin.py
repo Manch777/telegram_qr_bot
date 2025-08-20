@@ -218,9 +218,7 @@ async def export_users_excel(message: Message):
     buf.seek(0)
 
     fname = "users.xlsx" if not only_this else f"users_{config.EVENT_CODE}.xlsx"
-    await message.answer_document(
-        document=BufferedInputFile(buf.getvalue(), filename=fname),
-        caption="📄 Выгрузка базы users"
+    await message.answer_document(document=BufferedInputFile(buf.getvalue(), filename=fname), caption="📄 Выгрузка базы users"
         
 # =========================
 # /stats — витрина продаж (только оплаченные)
