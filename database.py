@@ -46,6 +46,33 @@ subscribers = Table(
     Column("last_seen_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
 )
 
+# --- Таблица мета-данных бота (key-value) ---
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+bot_meta = Table(
+    "bot_meta",
+    metadata,
+    Column("key", String, primary_key=True),
+    Column("value", String),
+)
+
+async def set_meta(key: str, value: str):
+    q = pg_insert(bot_meta).values(key=key, value=str(value)).on_conflict_do_update(
+        index_elements=[bot_meta.c.key],
+        set_={"value": str(value)}
+    )
+    await database.execute(q)
+
+async def get_meta(key: str):
+    row = await database.fetch_one(select(bot_meta.c.value).where(bot_meta.c.key == key))
+    return row[0] if row else None
+
+# Уникальные пользователи, которым шлём рассылку
+async def get_all_recipient_ids() -> list[int]:
+    rows = await database.fetch_all("SELECT DISTINCT user_id FROM users")
+    return [r[0] for r in rows]
+
+
 database = Database(POSTGRES_URL)
 
 # --- Базовые подключения ---

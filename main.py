@@ -78,7 +78,10 @@ dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.te
 
 async def on_startup(app: web.Application):
     await connect_db()
-    await bot.set_webhook(FULL_WEBHOOK_URL)
+    await bot.set_webhook(
+        FULL_WEBHOOK_URL,
+        allowed_updates=["message", "callback_query", "channel_post"]
+    )
     await bot.set_my_commands([
         BotCommand(command="start", description="Начать"),
         BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),

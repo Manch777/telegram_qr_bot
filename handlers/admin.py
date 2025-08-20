@@ -19,7 +19,7 @@ from database import (
     get_registered_users, get_paid_users,
     # обслуживание
     clear_database, get_unique_one_plus_one_attempters_for_event,
-    get_all_subscribers,
+    get_all_subscribers, set_meta, get_meta, get_all_recipient_ids,
 )
 from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
@@ -40,10 +40,16 @@ async def admin_panel(message: Message):
         BotCommand(command="scanner", description="📷 Открыть сканер"),
         BotCommand(command="paid_users", description="💰 Оплатившие пользователи"),
         BotCommand(command="change_event", description="🔁 Сменить мероприятие"),
+        BotCommand(command="broadcast_last", description="📣 Разослать последний пост"),  # <-- добавили
+        BotCommand(command="wishers", description="📝 Кто хотел 1+1"),        
         BotCommand(command="clear_db", description="Очистить базу"),
         BotCommand(command="exit_admin", description="Вернуться в пользовательское меню"),
     ], scope={"type": "chat", "chat_id": message.from_user.id})
 
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📣 Разослать последний пост", callback_data="broadcast_last")]
+    ])
+    
     await message.answer("🛡 Вы вошли в режим администратора.")
 
 # =========================
@@ -479,3 +485,69 @@ async def _broadcast_new_event(bot, event_title: str):
         except Exception:
             # игнорируем блокировки и пр.
             await asyncio.sleep(0.05)
+
+
+
+# =========================
+# Рассылки поста:
+# =========================
+
+LAST_POST_KEY = "last_channel_post_id"
+
+@router.channel_post()
+async def remember_last_channel_post(msg: Message):
+    # Поддерживаем @username и numeric id
+    is_same_channel = False
+    try:
+        is_same_channel = (
+            str(msg.chat.id) == str(CHANNEL_ID)
+            or (msg.chat.username and ("@" + msg.chat.username).lower() == str(CHANNEL_ID).lower())
+        )
+    except Exception:
+        pass
+    if not is_same_channel:
+        return
+
+    await set_meta(LAST_POST_KEY, msg.message_id)
+
+async def _broadcast_last_post(bot, reply_target):
+    post_id = await get_meta(LAST_POST_KEY)
+    if not post_id:
+        await reply_target.answer(
+            "⚠️ Я ещё не видел постов канала. "
+            "Опубликуйте новый пост (бот должен быть админом канала), затем попробуйте снова."
+        )
+        return
+
+    subs = await get_all_subscribers()
+    if not subs:
+        await reply_target.answer("Сейчас нет подписчиков для рассылки.")
+        return
+
+    sent, skipped = 0, 0
+    for uid, _uname in subs:
+        try:
+            await bot.copy_message(
+                chat_id=uid,
+                from_chat_id=CHANNEL_ID,    # может быть @username
+                message_id=int(post_id)
+            )
+            sent += 1
+        except Exception:
+            skipped += 1
+
+    await reply_target.answer(f"📣 Готово. Отправлено: {sent}, пропущено: {skipped}.")
+
+@router.message(lambda m: m.text == "/broadcast_last")
+async def broadcast_last_cmd(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    await _broadcast_last_post(message.bot, message)
+
+@router.callback_query(F.data == "broadcast_last")
+async def broadcast_last_cb(callback: CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await _broadcast_last_post(callback.bot, callback.message)
+
