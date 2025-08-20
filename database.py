@@ -56,22 +56,18 @@ bot_meta = Table(
     Column("value", String),
 )
 
-async def set_meta(key: str, value: str):
-    q = pg_insert(bot_meta).values(key=key, value=str(value)).on_conflict_do_update(
-        index_elements=[bot_meta.c.key],
-        set_={"value": str(value)}
-    )
-    await database.execute(q)
 
-async def get_meta(key: str):
-    row = await database.fetch_one(select(bot_meta.c.value).where(bot_meta.c.key == key))
-    return row[0] if row else None
-
-# Уникальные пользователи, которым шлём рассылку
-async def get_all_recipient_ids() -> list[int]:
-    rows = await database.fetch_all("SELECT DISTINCT user_id FROM users")
-    return [r[0] for r in rows]
-
+# --- Лимиты 1+1 по мероприятиям ---
+one_plus_one_limits = Table(
+    "one_plus_one_limits",
+    metadata,
+    Column("event_code", String, primary_key=True),
+    Column("limit_qty", Integer, nullable=False),
+    Column("updated_at", DateTime(timezone=True),
+           server_default=func.now(),
+           onupdate=func.now(),
+           nullable=False),
+)
 
 database = Database(POSTGRES_URL)
 
@@ -197,6 +193,53 @@ async def get_all_subscribers():
     rows = await database.fetch_all("SELECT user_id, username FROM subscribers")
     return [(r["user_id"], r["username"]) for r in rows]
 
+async def set_meta(key: str, value: str):
+    q = pg_insert(bot_meta).values(key=key, value=str(value)).on_conflict_do_update(
+        index_elements=[bot_meta.c.key],
+        set_={"value": str(value)}
+    )
+    await database.execute(q)
+
+async def get_meta(key: str):
+    row = await database.fetch_one(select(bot_meta.c.value).where(bot_meta.c.key == key))
+    return row[0] if row else None
+
+# Уникальные пользователи, которым шлём рассылку
+async def get_all_recipient_ids() -> list[int]:
+    rows = await database.fetch_all("SELECT DISTINCT user_id FROM users")
+    return [r[0] for r in rows]
+
+
+# Upsert лимита 1+1 для мероприятия
+async def set_one_plus_one_limit(event_code: str, qty: int):
+    q = """
+        INSERT INTO one_plus_one_limits(event_code, limit_qty, updated_at)
+        VALUES (:e, :q, NOW())
+        ON CONFLICT (event_code) DO UPDATE
+          SET limit_qty = EXCLUDED.limit_qty,
+              updated_at = NOW()
+    """
+    await database.execute(q, {"e": event_code, "q": qty})
+
+# Получить лимит 1+1 для мероприятия (или None)
+async def get_one_plus_one_limit(event_code: str) -> int | None:
+    row = await database.fetch_one(
+        "SELECT limit_qty FROM one_plus_one_limits WHERE event_code = :e",
+        {"e": event_code},
+    )
+    return row["limit_qty"] if row else None
+
+# Сколько уже занято 1+1 (оплачено + на проверке)
+async def count_one_plus_one_taken(event_code: str) -> int:
+    return await count_ticket_type_for_event(event_code, "1+1")
+
+# Остаток по 1+1 (None — лимит не задан)
+async def remaining_one_plus_one_for_event(event_code: str) -> int | None:
+    limit = await get_one_plus_one_limit(event_code)
+    if limit is None:
+        return None
+    used = await count_one_plus_one_taken(event_code)
+    return max(limit - used, 0)
 
 # =============================================================================
 # Legacy-обёртки по user_id (совместимость со старым кодом)

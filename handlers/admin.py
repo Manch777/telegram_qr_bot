@@ -20,6 +20,8 @@ from database import (
     # обслуживание
     clear_database, get_unique_one_plus_one_attempters_for_event,
     get_all_subscribers, set_meta, get_meta, get_all_recipient_ids,
+    set_one_plus_one_limit, get_one_plus_one_limit,
+    count_one_plus_one_taken, remaining_one_plus_one_for_event,
 )
 from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
@@ -356,6 +358,7 @@ async def process_password(message: Message, state: FSMContext):
 class ChangeEventStates(StatesGroup):
     waiting_for_password = State()
     waiting_for_event_name = State()
+    waiting_for_1p1_limit = State()   # <— новое состояние
 
 def _normalize_event_name(raw: str) -> str:
     # Прибираем лишние пробелы, убираем перевод строки по краям
@@ -413,16 +416,56 @@ async def change_event_set_name(message: Message, state: FSMContext):
     # Меняем активное событие "на лету"
     config.EVENT_CODE = new
 
-    await state.clear()
-    await message.answer(
-        "✅ Мероприятие обновлено!\n"
-        f"Текущее: {config.EVENT_CODE}\n\n"
-        "Акция 1+1 снова доступна (счётчик считается по текущему названию мероприятия)."
+
+    # Сохраним во FSM, нужно ли потом делать рассылку
+    await state.update_data(
+        _broadcast_needed=(old == "none" and new.strip().lower() != "none"),
+        _new_event_code=new
     )
 
-    # если было none → стало «не none», запускаем рассылку
-    if old == "none" and new.strip().lower() != "none":
+    # Переходим к вводу лимита 1+1
+    await state.set_state(ChangeEventStates.waiting_for_1p1_limit)
+    await message.answer(
+        "Введите число — сколько билетов *1+1* доступно на это мероприятие?\n"
+        "_0 — отключить 1+1; положительное число — разрешить._",
+        parse_mode="Markdown",
+    )
+
+@router.message(ChangeEventStates.waiting_for_1p1_limit)
+async def change_event_set_limit(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    raw = (message.text or "").strip()
+    try:
+        qty = int(raw)
+        if qty < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("⚠️ Введите целое число ≥ 0 (например: 0, 3, 10).")
+        return
+
+    # Сохраняем лимит для текущего мероприятия
+    await set_one_plus_one_limit(config.EVENT_CODE, qty)
+    used = await count_one_plus_one_taken(config.EVENT_CODE)
+    left = max(qty - used, 0)
+
+    data = await state.get_data()
+    await state.clear()
+
+    await message.answer(
+        "✅ Мероприятие обновлено!\n"
+        f"Текущее: {config.EVENT_CODE}\n"
+        f"Лимит 1+1: {qty}\n"
+        f"Уже занято: {used}\n"
+        f"Осталось: {left}"
+    )
+
+    # Если раньше было none → стало не none — запускаем рассылку сейчас
+    if data.get("_broadcast_needed"):
         await message.answer("📣 Делаю рассылку подписчикам о новом мероприятии…")
+        # _broadcast_new_event(bot, event_code) — оставь твою реализацию
         asyncio.create_task(_broadcast_new_event(message.bot, config.EVENT_CODE))
 
 

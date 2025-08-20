@@ -11,6 +11,7 @@ from database import (
     get_paid_status_by_id, set_paid_status_by_id,
     count_ticket_type_paid_for_event, count_ticket_type_for_event,
     log_one_plus_one_attempt, add_subscriber,
+    get_one_plus_one_limit, remaining_one_plus_one_for_event,
 )
 
 router = Router()
@@ -73,17 +74,16 @@ async def buy_1plus1(callback: CallbackQuery):
         )
         return
     
-    # лимит 5 продаж на ТЕКУЩЕЕ мероприятие
-    count = await count_ticket_type_for_event(config.EVENT_CODE, "1+1")
-    if count >= 5:
-        # ⬇️ записываем, что человек хотел 1+1, но не успел
-        await log_one_plus_one_attempt(
-            user_id=callback.from_user.id,
-            username=callback.from_user.username,
-            event_code=config.EVENT_CODE,
-        )
+    limit = await get_one_plus_one_limit(config.EVENT_CODE)
+    if limit is None or limit <= 0:
+        await callback.message.answer("❌ Акция '1+1' сейчас недоступна для этого мероприятия.")
+        return
+
+    left = await remaining_one_plus_one_for_event(config.EVENT_CODE)
+    if left is not None and left <= 0:
         await callback.message.answer("❌ Акция '1+1' больше недоступна для этого мероприятия.")
         return
+
     await _present_payment(callback, ticket_type="1+1")
     
 # 1 билет
