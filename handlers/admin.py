@@ -54,7 +54,6 @@ async def admin_panel(message: Message):
             BotCommand(command="change_event", description="🔁 Сменить мероприятие"),
             BotCommand(command="broadcast_last", description="📣 Разослать последний пост"),  # <-- добавили
             BotCommand(command="wishers", description="📝 Кто хотел 1+1"),
-            BotCommand(command="stats", description="📊 Cтатистика о количестве проданных билетов текущего мероприятия"),
             BotCommand(command="/stats_this", description="📊 Cтатистика о количестве проданных билетов"),
             BotCommand(command="export_users", description="📤 Выгрузить базу (все)"),
             BotCommand(command="export_users_this", description="📤 Выгрузить базу (текущее)"),
@@ -227,63 +226,6 @@ async def export_users_excel(message: Message):
 # /stats — витрина продаж (только оплаченные)
 # /stats_all — оплаченные + на проверке
 # =========================
-@router.message(lambda m: m.text in ("/stats", "/stats_all"))
-async def ticket_stats(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("🚫 У вас нет прав для этой команды.")
-        return
-
-    include_pending = (message.text == "/stats_all")
-    statuses = ("оплатил", "на проверке") if include_pending else ("оплатил",)
-
-    rows = await get_ticket_stats_grouped(paid_statuses=statuses)
-    if not rows:
-        await message.answer("Пока нет данных по продажам.")
-        return
-
-    # Группируем по мероприятию
-    by_event = {}
-    grand_total = 0
-    for r in rows:
-        ev = r["event_code"]
-        tt = r["ticket_type"]
-        cnt = int(r["count"])
-        by_event.setdefault(ev, []).append((tt, cnt))
-        grand_total += cnt
-
-    # Соберём текст
-    header = "📊 Статистика продаж по мероприятиям\n" + \
-             ("(оплачено + на проверке)\n\n" if include_pending else "(только оплачено)\n\n")
-    parts = [header]
-    for ev, items in by_event.items():
-        total_ev = sum(c for _, c in items)
-        parts.append(f"• {ev} — всего: {total_ev}")
-        for tt, cnt in items:
-            parts.append(f"   └─ {tt}: {cnt}")
-        parts.append("")  # пустая строка-разделитель
-
-    parts.append(f"ИТОГО по всем мероприятиям: {grand_total}")
-
-    text = "\n".join(parts)
-
-    # Если длинно — приложим Excel
-    if len(text) <= 3500:
-        await message.answer(text)
-    else:
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "ticket_stats"
-        ws.append(["event_code", "ticket_type", "count", "статусы"])
-        for r in rows:
-            ws.append([r["event_code"], r["ticket_type"], int(r["count"]), ", ".join(statuses)])
-
-        bio = BytesIO()
-        wb.save(bio)
-        bio.seek(0)
-        await message.answer_document(
-            document=BufferedInputFile(bio.getvalue(), filename="ticket_stats.xlsx"),
-            caption="📄 Статистика продаж (Excel)"
-        )
 
 # По текущему мероприятию из config.EVENT_CODE
 @router.message(lambda m: m.text == "/stats_this")
