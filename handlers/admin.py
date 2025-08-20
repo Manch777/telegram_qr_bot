@@ -596,28 +596,21 @@ async def _broadcast_new_event(bot, event_title: str):
 class BroadcastLastStates(StatesGroup):
     waiting_for_password = State()
 
-@router.message(lambda msg: msg.text == "/broadcast_last")
-async def broadcast_last_start(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("🚫 У вас нет прав для этой команды.")
-        return
-    await state.set_state(BroadcastLastStates.waiting_for_password)
-    await message.answer("🔒 Введите пароль для рассылки последнего поста:")
-
 @router.message(BroadcastLastStates.waiting_for_password)
 async def broadcast_last_check_password(message: Message, state: FSMContext):
     if message.from_user.id not in ADMIN_IDS:
         await state.clear()
         return
 
-    if (message.text or "").strip() != ADMIN_BROADCAST_PASSWORD:
-        await message.answer("❌ Неверный пароль. Отмена.")
+    pwd_ok = (message.text or "").strip() == (ADMIN_BROADCAST_PASSWORD or ADMIN_EVENT_PASSWORD or "")
+    if not pwd_ok:
+        await message.answer("❌ Неверный пароль. Рассылка отменена.")
         await state.clear()
         return
 
     await state.clear()
-    # запускаем рассылку
-    await _broadcast_last_post(message)
+    await message.answer("✅ Пароль принят. Начинаю рассылку…")
+    await _broadcast_last_post(message.bot, message)
     
 LAST_POST_KEY = "last_channel_post_id"
 
@@ -666,15 +659,17 @@ async def _broadcast_last_post(bot, reply_target):
     await reply_target.answer(f"📣 Готово. Отправлено: {sent}, пропущено: {skipped}.")
 
 @router.message(lambda m: m.text == "/broadcast_last")
-async def broadcast_last_cmd(message: Message):
+async def broadcast_last_cmd(message: Message, state: FSMContext):
     if message.from_user.id not in ADMIN_IDS:
         return
-    await _broadcast_last_post(message.bot, message)
+    await state.set_state(BroadcastLastStates.waiting_for_password)
+    await message.answer("🔒 Введите пароль для рассылки последнего поста канала:")
 
 @router.callback_query(F.data == "broadcast_last")
-async def broadcast_last_cb(callback: CallbackQuery):
+async def broadcast_last_cb(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id not in ADMIN_IDS:
         await callback.answer("Нет прав.", show_alert=True)
         return
-    await _broadcast_last_post(callback.bot, callback.message)
+    await state.set_state(BroadcastLastStates.waiting_for_password)
+    await callback.message.answer("🔒 Введите пароль для рассылки последнего поста канала:")
 
