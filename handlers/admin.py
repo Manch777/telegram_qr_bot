@@ -1,7 +1,7 @@
 from aiogram import Router, F
 import config
 import asyncio
-from config import PAYMENTS_ADMIN_ID, SCANNER_ADMIN_IDS
+from config import PAYMENTS_ADMIN_ID, SCANNER_ADMIN_IDS, INSTAGRAM_LINK
 import re
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
