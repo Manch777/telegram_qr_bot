@@ -3,6 +3,8 @@ import config
 import asyncio
 from config import PAYMENTS_ADMIN_ID, SCANNER_ADMIN_IDS, INSTAGRAM_LINK
 import re
+from openpyxl import Workbook
+from io import BytesIO
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -22,6 +24,8 @@ from database import (
     get_all_subscribers, set_meta, get_meta, get_all_recipient_ids,
     set_one_plus_one_limit, get_one_plus_one_limit,
     count_one_plus_one_taken, remaining_one_plus_one_for_event,
+    get_ticket_stats_grouped, get_ticket_stats_for_event,
+    get_all_users_full,
 )
 from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
@@ -46,12 +50,14 @@ async def admin_panel(message: Message):
 
         await message.bot.set_my_commands([
             BotCommand(command="report", description="📊 Статистика"),
-            BotCommand(command="users", description="📋 Список пользователей"),
             BotCommand(command="scanner", description="📷 Открыть сканер"),
-            BotCommand(command="paid_users", description="💰 Оплатившие пользователи"),
             BotCommand(command="change_event", description="🔁 Сменить мероприятие"),
             BotCommand(command="broadcast_last", description="📣 Разослать последний пост"),  # <-- добавили
-            BotCommand(command="wishers", description="📝 Кто хотел 1+1"),        
+            BotCommand(command="wishers", description="📝 Кто хотел 1+1"),
+            BotCommand(command="stats", description="📊 Cтатистика о количестве проданных билетов текущего мероприятия"),
+            BotCommand(command="/stats_this", description="📊 Cтатистика о количестве проданных билетов"),
+            BotCommand(command="export_users", description="📤 Выгрузить базу (все)"),
+            BotCommand(command="export_users_this", description="📤 Выгрузить базу (текущее)"),
             BotCommand(command="clear_db", description="Очистить базу"),
             BotCommand(command="exit_admin", description="Вернуться в пользовательское меню"),
         ], scope={"type": "chat", "chat_id": message.from_user.id})
@@ -167,31 +173,139 @@ async def report(message: Message):
     )
 
 # =========================
-# /users — список всех записей
+# /export_users — выгрузить ВСЕ покупки в Excel
+# /export_users_this — выгрузить покупки ТЕКУЩЕГО мероприятия
 # =========================
-@router.message(lambda msg: msg.text == "/users")
-async def list_users(message: Message):
+@router.message(lambda m: m.text in ("/export_users", "/export_users_this"))
+async def export_users_excel(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
 
-    users = await get_registered_users()
-    if not users:
-        await message.answer("Пока никто не зарегистрировался.")
+    only_this = (message.text == "/export_users_this")
+    rows = await get_all_users_full(config.EVENT_CODE if only_this else None)
+    if not rows:
+        await message.answer("Данных нет.")
         return
 
-    text = "📄 Записи покупок:\n\n"
-    for user_id, username, paid, status in users:
-        name = f"@{username}" if username else f"(id: {user_id})"
-        text += f"{name} — {status} / {paid}\n"
+    # Готовим Excel
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "users"
 
-    if len(text) > 4000:
-        with open("registered_users.txt", "w", encoding="utf-8") as f:
-            f.write(text)
-        file = FSInputFile("registered_users.txt")
-        await message.answer_document(file, caption="📄 Список покупок")
-    else:
+    # Шапка
+    headers = [
+        "id", "user_id", "username", "event_code",
+        "ticket_type", "paid", "status", "purchase_date"
+    ]
+    ws.append(headers)
+
+    # Данные
+    for r in rows:
+        ws.append([
+            r["id"],
+            r["user_id"],
+            r["username"],
+            r["event_code"],
+            r["ticket_type"],
+            r["paid"],
+            r["status"],
+            r["purchase_date"],  # это date из БД — openpyxl съест нормально
+        ])
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+
+    fname = "users.xlsx" if not only_this else f"users_{config.EVENT_CODE}.xlsx"
+    await message.answer_document(
+        document=BufferedInputFile(buf.getvalue(), filename=fname),
+        caption="📄 Выгрузка базы users"
+        
+# =========================
+# /stats — витрина продаж (только оплаченные)
+# /stats_all — оплаченные + на проверке
+# =========================
+@router.message(lambda m: m.text in ("/stats", "/stats_all"))
+async def ticket_stats(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("🚫 У вас нет прав для этой команды.")
+        return
+
+    include_pending = (message.text == "/stats_all")
+    statuses = ("оплатил", "на проверке") if include_pending else ("оплатил",)
+
+    rows = await get_ticket_stats_grouped(paid_statuses=statuses)
+    if not rows:
+        await message.answer("Пока нет данных по продажам.")
+        return
+
+    # Группируем по мероприятию
+    by_event = {}
+    grand_total = 0
+    for r in rows:
+        ev = r["event_code"]
+        tt = r["ticket_type"]
+        cnt = int(r["count"])
+        by_event.setdefault(ev, []).append((tt, cnt))
+        grand_total += cnt
+
+    # Соберём текст
+    header = "📊 Статистика продаж по мероприятиям\n" + \
+             ("(оплачено + на проверке)\n\n" if include_pending else "(только оплачено)\n\n")
+    parts = [header]
+    for ev, items in by_event.items():
+        total_ev = sum(c for _, c in items)
+        parts.append(f"• {ev} — всего: {total_ev}")
+        for tt, cnt in items:
+            parts.append(f"   └─ {tt}: {cnt}")
+        parts.append("")  # пустая строка-разделитель
+
+    parts.append(f"ИТОГО по всем мероприятиям: {grand_total}")
+
+    text = "\n".join(parts)
+
+    # Если длинно — приложим Excel
+    if len(text) <= 3500:
         await message.answer(text)
+    else:
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "ticket_stats"
+        ws.append(["event_code", "ticket_type", "count", "статусы"])
+        for r in rows:
+            ws.append([r["event_code"], r["ticket_type"], int(r["count"]), ", ".join(statuses)])
+
+        bio = BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        await message.answer_document(
+            document=BufferedInputFile(bio.getvalue(), filename="ticket_stats.xlsx"),
+            caption="📄 Статистика продаж (Excel)"
+        )
+
+# По текущему мероприятию из config.EVENT_CODE
+@router.message(lambda m: m.text == "/stats_this")
+async def ticket_stats_this(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("🚫 У вас нет прав для этой команды.")
+        return
+
+    ev = config.EVENT_CODE
+    rows = await get_ticket_stats_for_event(ev, paid_statuses=("оплатил",))
+    if not rows:
+        await message.answer(f"Для «{ev}» оплаченных билетов нет.")
+        return
+
+    total = sum(int(r["count"]) for r in rows)
+    parts = [f"📊 «{ev}»: только оплаченные", ""]
+    for r in rows:
+        parts.append(f"• {r['ticket_type']}: {int(r['count'])}")
+    parts.append("")
+    parts.append(f"ИТОГО: {total}")
+
+    await message.answer("\n".join(parts))
+
 
 # =========================
 # /exit_admin — выйти из режима админа
@@ -293,38 +407,13 @@ async def reject_payment(callback: CallbackQuery):
             chat_id=row["user_id"],
             message_id=sent.message_id,
             row_id=row_id,
-            timeout_sec=20  # 5 минут
+            timeout_sec=300  # 5 минут
         )
     )
     
     await callback.message.edit_text(f"❌ Оплата по билету #{row_id} отклонена. Пользователь уведомлён.")
 
-# =========================
-# /paid_users — список оплаченных записей
-# =========================
-@router.message(lambda msg: msg.text == "/paid_users")
-async def list_paid_users(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("🚫 У вас нет прав для этой команды.")
-        return
 
-    users = await get_paid_users()
-    if not users:
-        await message.answer("❌ Пока никто не оплатил.")
-        return
-
-    text = "💰 Оплаченные покупки:\n\n"
-    for user_id, username, status, paid in users:
-        name = f"@{username}" if username else f"(id: {user_id})"
-        text += f"{name} — {paid} / {status}\n"
-
-    if len(text) > 4000:
-        with open("paid_users.txt", "w", encoding="utf-8") as f:
-            f.write(text)
-        file = FSInputFile("paid_users.txt")
-        await message.answer_document(file, caption="💰 Список оплативших")
-    else:
-        await message.answer(text)
 
 # =========================
 # Очистка базы (с паролем)

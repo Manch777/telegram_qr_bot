@@ -322,3 +322,75 @@ async def get_unique_one_plus_one_attempters_for_event(event_code: str):
         ORDER BY last_try DESC
     """
     return await database.fetch_all(q, {"e": event_code})
+
+
+# =============================================================================
+# Статистика продаж по мероприятиям/типам
+# =============================================================================
+
+async def get_ticket_stats_grouped(paid_statuses=("оплатил",)):
+    """
+    Вернёт сгруппированную статистику: (event_code, ticket_type, count)
+    по указанным статусам оплаты (по умолчанию только 'оплатил').
+    """
+    if paid_statuses:
+        placeholders = ", ".join([f":p{i}" for i in range(len(paid_statuses))])
+        values = {f"p{i}": s for i, s in enumerate(paid_statuses)}
+        where = f"paid IN ({placeholders})"
+    else:
+        values = {}
+        where = "TRUE"
+
+    q = f"""
+        SELECT
+            COALESCE(event_code, '—') AS event_code,
+            COALESCE(ticket_type, '—') AS ticket_type,
+            COUNT(*)::int AS count
+        FROM users
+        WHERE {where}
+        GROUP BY event_code, ticket_type
+        ORDER BY event_code, ticket_type
+    """
+    return await database.fetch_all(q, values)
+
+async def get_ticket_stats_for_event(event_code: str, paid_statuses=("оплатил",)):
+    """
+    То же, но только для одного мероприятия.
+    """
+    if paid_statuses:
+        placeholders = ", ".join([f":p{i}" for i in range(len(paid_statuses))])
+        values = {f"p{i}": s for i, s in enumerate(paid_statuses)}
+        paid_clause = f"AND paid IN ({placeholders})"
+    else:
+        values = {}
+        paid_clause = ""
+
+    values["e"] = event_code
+
+    q = f"""
+        SELECT
+            COALESCE(ticket_type, '—') AS ticket_type,
+            COUNT(*)::int AS count
+        FROM users
+        WHERE event_code = :e
+          {paid_clause}
+        GROUP BY ticket_type
+        ORDER BY ticket_type
+    """
+    return await database.fetch_all(q, values)
+
+
+
+from typing import Optional
+from sqlalchemy import select, desc
+
+async def get_all_users_full(event_code: Optional[str] = None):
+    """
+    Возвращает все строки из таблицы users.
+    Если event_code задан — только по этому мероприятию.
+    """
+    if event_code:
+        q = select(users).where(users.c.event_code == event_code).order_by(desc(users.c.id))
+    else:
+        q = select(users).order_by(desc(users.c.id))
+    return await database.fetch_all(q)

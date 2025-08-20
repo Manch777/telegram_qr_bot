@@ -185,7 +185,7 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
             chat_id=user_id,
             message_id=sent.message_id,
             row_id=row_id,
-            timeout_sec=20  # 5 минут
+            timeout_sec=300  # 5 минут
         )
     )
 
