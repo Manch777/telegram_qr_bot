@@ -198,7 +198,7 @@ async def list_users(message: Message):
 # =========================
 @router.message(lambda msg: msg.text == "/exit_admin")
 async def exit_admin_mode(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
+    if not is_scanner_admin(message.from_user.id):
         return
 
     await message.bot.delete_my_commands(scope=BotCommandScopeChat(chat_id=message.from_user.id))
