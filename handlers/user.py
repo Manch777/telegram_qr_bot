@@ -9,7 +9,8 @@ from config import CHANNEL_ID, PAYMENT_LINK, INSTAGRAM_LINK, PROMOCODES, ADMIN_I
 from database import (
     add_user,  get_row,                             # -> возвращает row_id (id строки покупки)
     get_paid_status_by_id, set_paid_status_by_id,
-    count_ticket_type_paid_for_event, count_ticket_type_for_event, log_one_plus_one_attempt,
+    count_ticket_type_paid_for_event, count_ticket_type_for_event,
+    log_one_plus_one_attempt, add_subscriber,
 )
 
 router = Router()
@@ -21,6 +22,9 @@ _AWAIT_PROMO = set()   # set[int] of user_id
 # /start: приветствие + 2 кнопки
 @router.message(CommandStart())
 async def start_command(message: Message):
+    
+    await add_subscriber(message.from_user.id, message.from_user.username)
+    
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подписаться на Telegram", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}")],
         [InlineKeyboardButton(text="📷 Подписаться на Instagram", url=INSTAGRAM_LINK)],
@@ -37,6 +41,18 @@ async def start_command(message: Message):
 # Меню выбора билета
 @router.callback_query(F.data == "buy_ticket_menu")
 async def ticket_menu(callback: CallbackQuery):
+
+    # на всякий случай обновим подписку
+    await add_subscriber(callback.from_user.id, callback.from_user.username)
+
+    # если мероприятий нет — сообщаем и выходим
+    if (config.EVENT_CODE or "").strip().lower() == "none":
+        await callback.message.answer(
+            "Сейчас мероприятий нет.\n"
+            "Мы сообщим вам, как только объявим следующее событие. Спасибо! 🖤"
+        )
+        return
+    
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎫 Билет 1+1", callback_data="ticket_1plus1")],
         [InlineKeyboardButton(text="🎫 1 билет", callback_data="ticket_single")],

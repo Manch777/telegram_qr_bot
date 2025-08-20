@@ -19,6 +19,7 @@ from database import (
     get_registered_users, get_paid_users,
     # обслуживание
     clear_database, get_unique_one_plus_one_attempters_for_event,
+    get_all_subscribers,
 )
 from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
@@ -373,8 +374,11 @@ async def change_event_set_name(message: Message, state: FSMContext):
         await message.answer("⚠️ Пустое название. Введите ещё раз или /admin для отмены.")
         return
 
-    # Устанавливаем одно поле — оно и «код», и «название»
-    config.EVENT_CODE = title
+    old = (config.EVENT_CODE or "").strip().lower()
+    new = (title or "").strip()
+
+    # Меняем активное событие "на лету"
+    config.EVENT_CODE = new
 
     await state.clear()
     await message.answer(
@@ -382,6 +386,11 @@ async def change_event_set_name(message: Message, state: FSMContext):
         f"Текущее: {config.EVENT_CODE}\n\n"
         "Акция 1+1 снова доступна (счётчик считается по текущему названию мероприятия)."
     )
+
+    # если было none → стало «не none», запускаем рассылку
+    if old == "none" and new.strip().lower() != "none":
+        await message.answer("📣 Делаю рассылку подписчикам о новом мероприятии…")
+        asyncio.create_task(_broadcast_new_event(message.bot, config.EVENT_CODE))
 
 
 
@@ -444,3 +453,27 @@ async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id
             reply_markup=kb
         )
 
+
+# =========================
+# Хелпер для рассылки:
+# =========================
+
+async def _broadcast_new_event(bot, event_title: str):
+    subs = await get_all_subscribers()
+    if not subs:
+        return
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
+    ])
+    text = (
+        f"🔥 Новое мероприятие: {event_title}\n\n"
+        "Билеты уже доступны — жми кнопку ниже!"
+    )
+    # Telegram: не чаще ~30 сообщений/сек. Пойдём мягко — 20/сек.
+    for uid, _uname in subs:
+        try:
+            await bot.send_message(uid, text, reply_markup=kb)
+            await asyncio.sleep(0.05)
+        except Exception:
+            # игнорируем блокировки и пр.
+            await asyncio.sleep(0.05)

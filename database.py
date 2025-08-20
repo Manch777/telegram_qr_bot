@@ -37,6 +37,15 @@ one_plus_one_attempts = Table(
     Column("attempted_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
 )
 
+# --- Подписчики (те, кто запускал бота) ---
+subscribers = Table(
+    "subscribers",
+    metadata,
+    Column("user_id", BigInteger, primary_key=True),
+    Column("username", String),
+    Column("last_seen_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
+)
+
 database = Database(POSTGRES_URL)
 
 # --- Базовые подключения ---
@@ -145,6 +154,22 @@ async def get_paid_users():
 
 async def clear_database():
     await database.execute(users.delete())
+
+# --- Подписчики: upsert и выборка ---
+async def add_subscriber(user_id: int, username: str | None):
+    q = """
+    INSERT INTO subscribers(user_id, username, last_seen_at)
+    VALUES (:uid, :uname, NOW())
+    ON CONFLICT (user_id) DO UPDATE
+      SET username = EXCLUDED.username,
+          last_seen_at = NOW()
+    """
+    await database.execute(q, {"uid": user_id, "uname": (username or "Без ника")})
+
+async def get_all_subscribers():
+    rows = await database.fetch_all("SELECT user_id, username FROM subscribers")
+    return [(r["user_id"], r["username"]) for r in rows]
+
 
 # =============================================================================
 # Legacy-обёртки по user_id (совместимость со старым кодом)
