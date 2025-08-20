@@ -1,6 +1,7 @@
 # handlers/user.py
 from aiogram import Router, F
 import config
+import asyncio
 from aiogram.filters import CommandStart
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
@@ -122,10 +123,22 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
         "После оплаты нажмите «Я оплатил».\n"
         "❗️В комментариях платежа укажите свой Telegram-ник."
     )
+    # отправляем сообщение с кнопками и получаем объект сообщения
     if from_message:
-        await obj.answer(text, reply_markup=kb)
+        sent = await obj.answer(text, reply_markup=kb)
     else:
-        await obj.message.answer(text, reply_markup=kb)
+        sent = await obj.message.answer(text, reply_markup=kb)
+
+    # запускаем таймер на 5 минут — если не оплачен, пришлём уведомление и новое меню
+    asyncio.create_task(
+        _expire_payment_after(
+            bot=obj.bot,
+            chat_id=user_id,
+            message_id=sent.message_id,
+            row_id=row_id,
+            timeout_sec=35  # 5 минут
+        )
+    )
 
 
 # Пользователь нажимает "Я оплатил" — по КОНКРЕТНОЙ покупке (row_id)
@@ -183,3 +196,33 @@ async def payment_confirmation(callback: CallbackQuery):
 @router.message(lambda m: m.text == "/help")
 async def help_command(message: Message):
     await message.answer("ℹ️ Если у вас возникли вопросы — @Manch7")
+
+
+
+#Хелпер для тайм-аута
+async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int, timeout_sec: int = 300):
+    # ждём 5 минут
+    await asyncio.sleep(timeout_sec)
+
+    # проверяем статус по конкретной покупке
+    from database import get_paid_status_by_id  # локальный импорт, чтобы избежать циклов
+    status = await get_paid_status_by_id(row_id)
+
+    if status == "не оплатил":
+        # пробуем убрать старые кнопки «Оплатить / Я оплатил»
+        try:
+            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
+        except Exception:
+            pass  # сообщение могли удалить/изменить — не критично
+
+        # присылаем уведомление и заново меню выбора
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎫 Билет 1+1", callback_data="ticket_1plus1")],
+            [InlineKeyboardButton(text="🎫 1 билет", callback_data="ticket_single")],
+            [InlineKeyboardButton(text="🎟 У меня есть промокод", callback_data="ticket_promocode")]
+        ])
+        await bot.send_message(
+            chat_id,
+            "⏰ Время оплаты истекло.\nВыберите тип билета заново:",
+            reply_markup=kb
+        )
