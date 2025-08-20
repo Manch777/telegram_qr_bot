@@ -178,10 +178,10 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid_row:{row_id}")]
     ])
     text = (
-        f"Вы выбрали: {ticket_type}\n"
+        f"Тип билета: {ticket_type}\n"
         f"Мероприятие: {config.EVENT_CODE}\n\n"
-        "После оплаты нажмите «Я оплатил».\n"
-        "❗️В комментариях платежа укажите свой Telegram-ник."
+        "После оплаты нажми «Я оплатил».\n"
+        "❗️В комментариях платежа укажи свой Telegram-ник."
     )
     # отправляем сообщение с кнопками и получаем объект сообщения
     if from_message:
@@ -255,7 +255,10 @@ async def payment_confirmation(callback: CallbackQuery):
 # /help
 @router.message(lambda m: m.text == "/help")
 async def help_command(message: Message):
-    await message.answer("ℹ️ Если у вас возникли вопросы — @Manch7")
+    await message.answer(
+        "ℹ️ Если у вас возникли вопросы или проблемы, пожалуйста, обратитесь к администратору:\n"
+        "@Manch7\n\n"
+    )
 
 
 

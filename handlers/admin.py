@@ -260,7 +260,7 @@ async def exit_admin_mode(message: Message):
 
     await message.bot.delete_my_commands(scope=BotCommandScopeChat(chat_id=message.from_user.id))
     await message.bot.set_my_commands([
-        BotCommand(command="start", description="Получить QR"),
+        BotCommand(command="start", description="Начать"),
         BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
     ])
 
@@ -336,9 +336,8 @@ async def reject_payment(callback: CallbackQuery):
     sent = await callback.bot.send_message(
         chat_id=row["user_id"],
         text=(
-            "🚫 Оплата не подтверждена.\n"
-            "Проверьте платёж или свяжитесь с администратором.\n\n"
-            "Если всё исправили — нажмите «Я оплатил»."
+            "🚫 Ваша оплата не была подтверждена.\n"
+            "Пожалуйста, проверьте корректность платежа или свяжитесь с администратором: @Manch7"
         ),
         reply_markup=kb
     )
