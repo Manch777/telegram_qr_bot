@@ -19,6 +19,9 @@ router = Router()
 _AWAIT_PROMO = set()   # set[int] of user_id
 
 
+def _event_off() -> bool:
+    return (config.EVENT_CODE or "").strip().lower() == "none"
+
 # /start: приветствие + 2 кнопки
 @router.message(CommandStart())
 async def start_command(message: Message):
@@ -46,10 +49,9 @@ async def ticket_menu(callback: CallbackQuery):
     await add_subscriber(callback.from_user.id, callback.from_user.username)
 
     # если мероприятий нет — сообщаем и выходим
-    if (config.EVENT_CODE or "").strip().lower() == "none":
+    if _event_off():
         await callback.message.answer(
-            "Сейчас мероприятий нет.\n"
-            "Мы сообщим вам, как только объявим следующее событие. Спасибо! 🖤"
+            "Сейчас мероприятий нет.\nМы сообщим, как только объявим следующее событие. 🖤"
         )
         return
     
@@ -64,6 +66,13 @@ async def ticket_menu(callback: CallbackQuery):
 # Билет 1+1 (лимит 5 оплаченных на текущее мероприятие)
 @router.callback_query(F.data == "ticket_1plus1")
 async def buy_1plus1(callback: CallbackQuery):
+    if _event_off():
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(
+            "Сейчас мероприятий нет. Как только появится новое — пришлём уведомление. 🖤"
+        )
+        return
+    
     # лимит 5 продаж на ТЕКУЩЕЕ мероприятие
     count = await count_ticket_type_for_event(config.EVENT_CODE, "1+1")
     if count >= 5:
@@ -80,12 +89,24 @@ async def buy_1plus1(callback: CallbackQuery):
 # 1 билет
 @router.callback_query(F.data == "ticket_single")
 async def buy_single(callback: CallbackQuery):
+    if _event_off():
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(
+            "Сейчас мероприятий нет. Как только появится новое — пришлём уведомление. 🖤"
+        )
+        return
     await _present_payment(callback, ticket_type="single")
 
 
 # Промокод — запрос ввода
 @router.callback_query(F.data == "ticket_promocode")
 async def ask_promocode(callback: CallbackQuery):
+    if _event_off():
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(
+            "Сейчас мероприятий нет. Как только появится новое — пришлём уведомление. 🖤"
+        )
+        return
     _AWAIT_PROMO.add(callback.from_user.id)
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="❌ Отмена", callback_data="promo_cancel")]
@@ -105,7 +126,12 @@ async def cancel_promocode(callback: CallbackQuery):
 async def handle_promocode(message: Message):
     if message.from_user.id not in _AWAIT_PROMO:
         return
-
+    if _event_off():
+        _AWAIT_PROMO.discard(message.from_user.id)
+        await message.answer(
+            "Сейчас мероприятий нет. Промокод можно будет применить, когда объявим новое событие."
+        )
+        return
     code = (message.text or "").strip().upper()
     if code not in PROMOCODES:
         await message.answer("❌ Неверный промокод. Попробуйте снова или нажмите /start.")
@@ -118,6 +144,13 @@ async def handle_promocode(message: Message):
 
 # Общая функция показа оплаты — СОЗДАЁТ новую запись (новую покупку) и даёт кнопку "Я оплатил"
 async def _present_payment(obj, ticket_type: str, from_message: bool = False):
+    # стоп, если событие выключено (на случай гонок/старых кнопок)
+    if _event_off():
+        # obj может быть CallbackQuery или Message
+        target = obj.message if hasattr(obj, "message") else obj
+        await target.answer("Сейчас мероприятий нет. Скоро расскажем про новое событие. 🖤")
+        return
+    
     user = obj.from_user
     user_id = user.id
     username = user.username or "Без ника"

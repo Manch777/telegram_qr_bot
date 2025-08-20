@@ -463,11 +463,13 @@ async def _broadcast_new_event(bot, event_title: str):
     if not subs:
         return
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
+        [InlineKeyboardButton(text="✅ Подписаться на Telegram", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}")],
+        [InlineKeyboardButton(text="📷 Подписаться на Instagram", url=INSTAGRAM_LINK)],
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]        
     ])
     text = (
         f"🔥 Новое мероприятие: {event_title}\n\n"
-        "Билеты уже доступны — жми кнопку ниже!"
+        "Билеты уже доступны — не забудь купить👇"
     )
     # Telegram: не чаще ~30 сообщений/сек. Пойдём мягко — 20/сек.
     for uid, _uname in subs:
