@@ -162,11 +162,20 @@ async def payment_confirmation(callback: CallbackQuery):
         [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"approve_row:{row_id}")],
         [InlineKeyboardButton(text="❌ Не подтверждена",   callback_data=f"reject_row:{row_id}")]
     ])
-    for admin_id in ADMIN_IDS:
+    recipient_id = getattr(config, "PAYMENTS_ADMIN_ID", None)
+    if not recipient_id:
+        # фолбэк: если не задан, шлём первому из ADMIN_IDS (или предупредим)
+        recipient_id = ADMIN_IDS[0] if ADMIN_IDS else None
+
+    if recipient_id:
         await callback.bot.send_message(
-            chat_id=admin_id,
+            chat_id=recipient_id,
             text=f"💰 Подтверждение оплаты пользователя @{username}\nТип билета: {ticket_type}",
             reply_markup=kb_admin
+        )
+    else:
+        await callback.message.answer(
+            "⚠️ Администратор для подтверждения оплаты не настроен. Сообщите организатору."
         )
 
 

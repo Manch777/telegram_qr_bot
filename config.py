@@ -8,6 +8,7 @@ CHANNEL_ID = os.getenv("CHANNEL_ID")
 INSTAGRAM_LINK = os.getenv("INSTAGRAM_LINK")
 SCAN_WEBAPP_URL = os.getenv("SCAN_WEBAPP_URL")
 ADMIN_IDS = [int(id_) for id_ in os.getenv("ADMIN_IDS", "").split(",") if id_]
+PAYMENTS_ADMIN_ID = int(os.getenv("PAYMENTS_ADMIN_ID", "0")) or None
 PAYMENT_LINK = os.getenv("PAYMENT_LINK")
 POSTGRES_URL = os.getenv("POSTGRES_URL")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
