@@ -1,5 +1,6 @@
 from aiogram import Router, F
 import config
+import asyncio
 from config import PAYMENTS_ADMIN_ID
 import re
 from aiogram.fsm.context import FSMContext
@@ -239,7 +240,7 @@ async def reject_payment(callback: CallbackQuery):
         [InlineKeyboardButton(text="💳 Оплатить", url=PAYMENT_LINK)],
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid_row:{row_id}")]
     ])
-    await callback.bot.send_message(
+    sent = await callback.bot.send_message(
         chat_id=row["user_id"],
         text=(
             "🚫 Оплата не подтверждена.\n"
@@ -248,7 +249,18 @@ async def reject_payment(callback: CallbackQuery):
         ),
         reply_markup=kb
     )
-
+    
+    # ⏱️ Запускаем новый 5-минутный таймер после отклонения
+    asyncio.create_task(
+        _expire_payment_after_admin(
+            bot=callback.bot,
+            chat_id=row["user_id"],
+            message_id=sent.message_id,
+            row_id=row_id,
+            timeout_sec=20  # 5 минут
+        )
+    )
+    
     await callback.message.edit_text(f"❌ Оплата по билету #{row_id} отклонена. Пользователь уведомлён.")
 
 # =========================
@@ -403,4 +415,32 @@ async def list_1plus1_wishers(message: Message):
         await message.answer_document(FSInputFile("wishers_1plus1.txt"), caption="📝 Список желающих 1+1")
     else:
         await message.answer(text)
+
+
+# =========================
+# Локальный хелпер таймера
+# =========================
+
+async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id: int, timeout_sec: int = 300):
+    await asyncio.sleep(timeout_sec)
+
+    from database import get_paid_status_by_id
+    status = await get_paid_status_by_id(row_id)
+
+    if status in ("не оплатил", "отклонено"):
+        try:
+            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
+        except Exception:
+            pass
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎫 Билет 1+1", callback_data="ticket_1plus1")],
+            [InlineKeyboardButton(text="🎫 1 билет", callback_data="ticket_single")],
+            [InlineKeyboardButton(text="🎟 У меня есть промокод", callback_data="ticket_promocode")]
+        ])
+        await bot.send_message(
+            chat_id,
+            "⏰ Время оплаты истекло.\nВыберите тип билета заново:",
+            reply_markup=kb
+        )
 

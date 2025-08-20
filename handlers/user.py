@@ -136,7 +136,7 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
             chat_id=user_id,
             message_id=sent.message_id,
             row_id=row_id,
-            timeout_sec=35  # 5 минут
+            timeout_sec=20  # 5 минут
         )
     )
 
@@ -208,7 +208,7 @@ async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int,
     from database import get_paid_status_by_id  # локальный импорт, чтобы избежать циклов
     status = await get_paid_status_by_id(row_id)
 
-    if status == "не оплатил":
+    if status in ("не оплатил", "отклонено"):
         # пробуем убрать старые кнопки «Оплатить / Я оплатил»
         try:
             await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
