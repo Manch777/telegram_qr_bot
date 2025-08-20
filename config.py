@@ -25,3 +25,5 @@ EVENT_TITLE = os.getenv("EVENT_TITLE", EVENT_CODE)
 
 # Пароль на смену события (можно тот же, что и для очистки БД)
 ADMIN_EVENT_PASSWORD = os.getenv("ADMIN_EVENT_PASSWORD", "12345")
+
+ADMIN_BROADCAST_PASSWORD = os.getenv("ADMIN_BROADCAST_PASSWORD", ADMIN_EVENT_PASSWORD)

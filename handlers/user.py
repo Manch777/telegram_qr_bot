@@ -76,11 +76,22 @@ async def buy_1plus1(callback: CallbackQuery):
     
     limit = await get_one_plus_one_limit(config.EVENT_CODE)
     if limit is None or limit <= 0:
+
+        await log_one_plus_one_attempt(
+            user_id=callback.from_user.id,
+            username=callback.from_user.username,
+            event_code=config.EVENT_CODE,
+        )
         await callback.message.answer("❌ Акция '1+1' сейчас недоступна для этого мероприятия.")
         return
 
     left = await remaining_one_plus_one_for_event(config.EVENT_CODE)
     if left is not None and left <= 0:
+        await log_one_plus_one_attempt(
+            user_id=callback.from_user.id,
+            username=callback.from_user.username,
+            event_code=config.EVENT_CODE,
+        )        
         await callback.message.answer("❌ Акция '1+1' больше недоступна для этого мероприятия.")
         return
 

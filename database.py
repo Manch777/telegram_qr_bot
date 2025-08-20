@@ -37,6 +37,27 @@ one_plus_one_attempts = Table(
     Column("attempted_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
 )
 
+# Получить лимит 1+1 для мероприятия (или None)
+async def get_one_plus_one_limit(event_code: str) -> int | None:
+    row = await database.fetch_one(
+        "SELECT limit_qty FROM one_plus_one_limits WHERE event_code = :e",
+        {"e": event_code},
+    )
+    return row["limit_qty"] if row else None
+
+# Сколько уже занято 1+1 (оплачено + на проверке)
+async def count_one_plus_one_taken(event_code: str) -> int:
+    return await count_ticket_type_for_event(event_code, "1+1")
+
+# Остаток по 1+1 (None — лимит не задан)
+async def remaining_one_plus_one_for_event(event_code: str) -> int | None:
+    limit = await get_one_plus_one_limit(event_code)
+    if limit is None:
+        return None
+    used = await count_one_plus_one_taken(event_code)
+    return max(limit - used, 0)
+
+
 # --- Подписчики (те, кто запускал бота) ---
 subscribers = Table(
     "subscribers",
@@ -221,25 +242,7 @@ async def set_one_plus_one_limit(event_code: str, qty: int):
     """
     await database.execute(q, {"e": event_code, "q": qty})
 
-# Получить лимит 1+1 для мероприятия (или None)
-async def get_one_plus_one_limit(event_code: str) -> int | None:
-    row = await database.fetch_one(
-        "SELECT limit_qty FROM one_plus_one_limits WHERE event_code = :e",
-        {"e": event_code},
-    )
-    return row["limit_qty"] if row else None
 
-# Сколько уже занято 1+1 (оплачено + на проверке)
-async def count_one_plus_one_taken(event_code: str) -> int:
-    return await count_ticket_type_for_event(event_code, "1+1")
-
-# Остаток по 1+1 (None — лимит не задан)
-async def remaining_one_plus_one_for_event(event_code: str) -> int | None:
-    limit = await get_one_plus_one_limit(event_code)
-    if limit is None:
-        return None
-    used = await count_one_plus_one_taken(event_code)
-    return max(limit - used, 0)
 
 # =============================================================================
 # Legacy-обёртки по user_id (совместимость со старым кодом)

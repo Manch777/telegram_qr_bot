@@ -1,7 +1,7 @@
 from aiogram import Router, F
 import config
 import asyncio
-from config import PAYMENTS_ADMIN_ID, SCANNER_ADMIN_IDS, INSTAGRAM_LINK
+from config import PAYMENTS_ADMIN_ID, SCANNER_ADMIN_IDS, INSTAGRAM_LINK, ADMIN_BROADCAST_PASSWORD
 import re
 from openpyxl import Workbook
 from io import BytesIO
@@ -25,7 +25,7 @@ from database import (
     set_one_plus_one_limit, get_one_plus_one_limit,
     count_one_plus_one_taken, remaining_one_plus_one_for_event,
     get_ticket_stats_grouped, get_ticket_stats_for_event,
-    get_all_users_full,
+    get_all_users_full, get_all_subscribers,
 )
 from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
@@ -593,7 +593,32 @@ async def _broadcast_new_event(bot, event_title: str):
 # =========================
 # Рассылки поста:
 # =========================
+class BroadcastLastStates(StatesGroup):
+    waiting_for_password = State()
 
+@router.message(lambda msg: msg.text == "/broadcast_last")
+async def broadcast_last_start(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("🚫 У вас нет прав для этой команды.")
+        return
+    await state.set_state(BroadcastLastStates.waiting_for_password)
+    await message.answer("🔒 Введите пароль для рассылки последнего поста:")
+
+@router.message(BroadcastLastStates.waiting_for_password)
+async def broadcast_last_check_password(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    if (message.text or "").strip() != ADMIN_BROADCAST_PASSWORD:
+        await message.answer("❌ Неверный пароль. Отмена.")
+        await state.clear()
+        return
+
+    await state.clear()
+    # запускаем рассылку
+    await _broadcast_last_post_to_all(message)
+    
 LAST_POST_KEY = "last_channel_post_id"
 
 @router.channel_post()
