@@ -91,7 +91,7 @@ async def admin_panel(message: Message):
 # =========================
 @router.message(lambda msg: msg.web_app_data is not None)
 async def handle_webapp_data(message: Message):
-    if not is_scanner_admin(message.from_user.id):
+    if not await _can_use_scanner(message.from_user.id):
         await message.answer("🚫 Нет прав на сканирование.")
         return
     payload = (message.web_app_data.data or "").strip()
@@ -273,7 +273,7 @@ async def exit_admin_mode(message: Message):
 # =========================
 @router.message(lambda msg: msg.text == "/scanner")
 async def scanner_command(message: Message):
-    if not _can_use_scanner(message.from_user.id):
+    if not await _can_use_scanner(message.from_user.id):
         await message.answer("🚫 Нет прав на использование сканера.")
         return
 
