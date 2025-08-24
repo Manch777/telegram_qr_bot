@@ -1,5 +1,6 @@
 from aiogram import Router, F
 import config
+import json
 import asyncio
 from config import PAYMENTS_ADMIN_ID, SCANNER_ADMIN_IDS, INSTAGRAM_LINK, ADMIN_BROADCAST_PASSWORD
 import re
@@ -811,3 +812,10 @@ async def scan_access_close(callback: CallbackQuery):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await callback.message.answer("Закрыто.")
+
+@router.message(lambda m: m.text == "/scan_access_menu")
+async def scan_access_menu_cmd(message: Message):
+    if message.from_user.id not in ADMIN_IDS:
+        await message.answer("Нет прав.")
+        return
+    await message.answer("🔐 Управление доступом к сканеру:", reply_markup=_scan_menu_kb()
