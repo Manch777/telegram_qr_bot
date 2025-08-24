@@ -38,13 +38,22 @@ def _root_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
     ])
 
-def _ticket_menu_kb() -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎫 Билет 1+1", callback_data="ticket_1plus1")],
-        [InlineKeyboardButton(text="🎫 1 билет", callback_data="ticket_single")],
-        [InlineKeyboardButton(text="🎟 У меня есть промокод", callback_data="ticket_promocode")],
-        [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="back:start")],
-    ])
+async def _ticket_menu_kb() -> InlineKeyboardMarkup:
+    rows = []
+    # показываем 1+1 только если лимит > 0
+    try:
+        limit = await get_one_plus_one_limit(config.EVENT_CODE)
+    except Exception:
+        limit = None
+
+    if limit and limit > 0:
+        rows.append([InlineKeyboardButton(text="🎫 Билет 1+1", callback_data="ticket_1plus1")])
+
+    rows.append([InlineKeyboardButton(text="🎫 1 билет", callback_data="ticket_single")])
+    rows.append([InlineKeyboardButton(text="🎟 У меня есть промокод", callback_data="ticket_promocode")])
+    rows.append([InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="back:start")])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 def _back_to_start_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -124,7 +133,8 @@ async def _show_root(bot, chat_id: int):
     return await _push_screen(bot, chat_id, _root_text(), _root_kb())
 
 async def _show_ticket_menu(bot, chat_id: int):
-    return await _push_screen(bot, chat_id, "Выбери тип билета:", _ticket_menu_kb())
+    kb = await _ticket_menu_kb()
+    return await _push_screen(bot, chat_id, "Выбери тип билета:", kb)
 
 # ————— Логика User —————
 

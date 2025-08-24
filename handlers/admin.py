@@ -614,11 +614,8 @@ async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id
         except Exception:
             pass
 
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🎫 Билет 1+1", callback_data="ticket_1plus1")],
-            [InlineKeyboardButton(text="🎫 1 билет", callback_data="ticket_single")],
-            [InlineKeyboardButton(text="🎟 У меня есть промокод", callback_data="ticket_promocode")]
-        ])
+        kb = await _purchase_menu_kb()
+        
         await bot.send_message(
             chat_id,
             "⏰ Время оплаты истекло.\nВыберите тип билета заново:",
@@ -952,3 +949,20 @@ async def scan_access_menu_cmd(message: Message):
         await message.answer("Нет прав.")
         return
     await message.answer("🔐 Управление доступом к сканеру:", reply_markup=_scan_menu_kb())
+
+
+
+async def _purchase_menu_kb() -> InlineKeyboardMarkup:
+    rows = []
+    try:
+        limit = await get_one_plus_one_limit(config.EVENT_CODE)
+    except Exception:
+        limit = None
+
+    if limit and limit > 0:
+        rows.append([InlineKeyboardButton(text="🎫 Билет 1+1", callback_data="ticket_1plus1")])
+
+    rows.append([InlineKeyboardButton(text="🎫 1 билет", callback_data="ticket_single")])
+    rows.append([InlineKeyboardButton(text="🎟 У меня есть промокод", callback_data="ticket_promocode")])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
