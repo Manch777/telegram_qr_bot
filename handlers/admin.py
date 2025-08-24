@@ -55,8 +55,8 @@ async def admin_panel(message: Message):
             BotCommand(command="change_event", description="🔁 Сменить мероприятие"),
             BotCommand(command="broadcast_last", description="📣 Разослать последний пост"),  # <-- добавили
             BotCommand(command="wishers", description="📝 Кто хотел 1+1"),
-            BotCommand(command="/stats_this", description="📊 Cтатистика о количестве проданных билетов"),
-            BotCommand(command="/scan_access_menu", description="🔐 Управление доступом к сканеру"),            
+            BotCommand(command="stats_this", description="📊 Cтатистика о количестве проданных билетов"),
+            BotCommand(command="scan_access_menu", description="🔐 Управление доступом к сканеру"),            
             BotCommand(command="export_users", description="📤 Выгрузить базу (все)"),
             BotCommand(command="export_users_this", description="📤 Выгрузить базу (текущее)"),
             BotCommand(command="clear_db", description="Очистить базу"),
@@ -257,7 +257,7 @@ async def ticket_stats_this(message: Message):
 # =========================
 @router.message(lambda msg: msg.text == "/exit_admin")
 async def exit_admin_mode(message: Message):
-    if not is_scanner_admin(message.from_user.id):
+    if not await _can_use_scanner(message.from_user.id):
         return
 
     await message.bot.delete_my_commands(scope=BotCommandScopeChat(chat_id=message.from_user.id))
