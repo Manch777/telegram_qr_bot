@@ -69,7 +69,7 @@ async def admin_panel(message: Message):
         await message.answer("🛡 Режим администратора включён.")
         return
     
-    if uid in SCANNER_ADMIN_IDS:
+    if await _can_use_scanner(uid):
         # Только сканер
         await message.bot.set_my_commands([
             BotCommand(command="scanner", description="📷 Открыть сканер"),
