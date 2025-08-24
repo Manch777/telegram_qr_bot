@@ -325,7 +325,7 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
         event_code=config.EVENT_CODE,
         ticket_type=ticket_type
     )
-    await set_paid_status_by_id(row_id, "в процессе оплаты")
+
     text = (
         f"Тип билета: {ticket_type}\n"
         f"Мероприятие: {config.EVENT_CODE}\n\n"
@@ -423,7 +423,7 @@ async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int,
     from database import get_paid_status_by_id
     status = await get_paid_status_by_id(row_id)
 
-    if status in ("в процессе оплаты"):
+    if status in ("не оплатил"):
         try:
             await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
         except Exception:
