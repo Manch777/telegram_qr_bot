@@ -379,7 +379,7 @@ async def reject_payment(callback: CallbackQuery):
             chat_id=row["user_id"],
             message_id=sent.message_id,
             row_id=row_id,
-            timeout_sec=300  # 5 минут
+            timeout_sec=10  # 5 минут
         )
     )
     
@@ -964,5 +964,6 @@ async def _purchase_menu_kb() -> InlineKeyboardMarkup:
 
     rows.append([InlineKeyboardButton(text="🎫 1 билет", callback_data="ticket_single")])
     rows.append([InlineKeyboardButton(text="🎟 У меня есть промокод", callback_data="ticket_promocode")])
+    rows.append([InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="back:start")])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)

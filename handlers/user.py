@@ -343,7 +343,7 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
             chat_id=user_id,
             message_id=sent.message_id,
             row_id=row_id,
-            timeout_sec=300
+            timeout_sec=10
         )
     )
 
@@ -428,5 +428,12 @@ async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int,
             await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
         except Exception:
             pass
-
-        await _show_ticket_menu(bot, chat_id)
+        
+        kb = await _show_ticket_menu(bot, chat_id)
+        
+        await bot.send_message(
+            chat_id,
+            "⏰ Время оплаты истекло.\nВыберите тип билета заново:",
+            reply_markup=kb
+        )
+        
