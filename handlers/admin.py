@@ -349,8 +349,7 @@ async def reject_payment(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплатить", url=PAYMENT_LINK)],
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid_row:{row_id}")],
-        [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="buy_ticket_menu")],
-
+        [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data=f"back_to_menu:{row_id}")],
     ])
     sent = await callback.bot.send_message(
         chat_id=row["user_id"],
@@ -572,6 +571,12 @@ async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id
     status = await get_paid_status_by_id(row_id)
 
     if status in ("не оплатил", "отклонено"):
+                # если было «отклонено», переводим в «не оплатил»
+        if status == "отклонено":
+            try:
+                await set_paid_status_by_id(row_id, "не оплатил")
+            except Exception:
+                pass
         try:
             await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
         except Exception:

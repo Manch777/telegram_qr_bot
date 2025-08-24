@@ -63,6 +63,42 @@ def _payment_kb(row_id: int) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="back:ticket")],
     ])
 
+# ⬅️ Вернуться назад с экрана «оплата отклонена»
+@router.callback_query(F.data.startswith("back_to_menu:"))
+async def back_from_reject(callback: CallbackQuery):
+    await callback.answer()
+
+    # row_id пришёл в коллбэке
+    try:
+        row_id = int(callback.data.split(":")[1])
+    except Exception:
+        row_id = None
+
+    # если это сообщение «оплата отклонена» — удалим его
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
+    # Если билету стоял статус «отклонено» — вернём в «не оплатил»
+    if row_id is not None:
+        try:
+            cur = await get_paid_status_by_id(row_id)
+            if cur == "отклонено":
+                await set_paid_status_by_id(row_id, "не оплатил")
+        except Exception:
+            pass
+
+    # Показать меню выбора билета (или сообщение, что мероприятий нет)
+    if _event_off():
+        await _push_screen(
+            callback.bot, callback.from_user.id,
+            "Сейчас мероприятий нет. Мы сообщим, как только объявим новое событие. 🖤",
+            _back_to_start_kb()
+        )
+    else:
+        await _show_ticket_menu(callback.bot, callback.from_user.id)
+
 async def _push_screen(bot, chat_id: int, text: str, kb: InlineKeyboardMarkup):
     """Удаляет предыдущий экран пользователя и отправляет новый.
        НО не удаляет «защищённый» экран ожидания подтверждения."""
