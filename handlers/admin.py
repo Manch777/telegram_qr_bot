@@ -425,27 +425,42 @@ def _normalize_event_name(raw: str) -> str:
     # Прибираем лишние пробелы, убираем перевод строки по краям
     return " ".join((raw or "").strip().split())
 
+def _change_event_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔁 Сменить мероприятие", callback_data="change_event")],
+        [InlineKeyboardButton(text="🛑 Остановить продажи (нет мероприятия)", callback_data="event_off")],
+    ])
+
 @router.message(lambda msg: msg.text == "/change_event")
 async def change_event_command(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("🚫 У вас нет доступа к панели администратора.")
         return
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔁 Сменить мероприятие", callback_data="change_event")],
-    ])
     await message.answer(
         f"Текущее мероприятие: {config.EVENT_CODE}",
-        reply_markup=kb
+        reply_markup=_change_event_menu_kb()
     )
+
 
 @router.callback_query(F.data == "change_event")
 async def change_event_start(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id not in ADMIN_IDS:
         await callback.answer("Нет прав.", show_alert=True)
         return
+    await state.update_data(_mode="change")  # режим: смена на новое название
     await state.set_state(ChangeEventStates.waiting_for_password)
     await callback.message.answer("🔒 Введите пароль для смены мероприятия:")
+
+@router.callback_query(F.data == "event_off")
+async def event_off_start(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await state.update_data(_mode="off")  # режим: выключить продажи (EVENT_CODE="none")
+    await state.set_state(ChangeEventStates.waiting_for_password)
+    await callback.message.answer("🔒 Введите пароль для отключения продаж (нет мероприятия):")
+
 
 @router.message(ChangeEventStates.waiting_for_password)
 async def change_event_check_password(message: Message, state: FSMContext):
@@ -457,8 +472,24 @@ async def change_event_check_password(message: Message, state: FSMContext):
         await state.clear()
         return
 
+    data = await state.get_data()
+    mode = data.get("_mode", "change")
+
+    # Режим: выключить продажи — просто ставим EVENT_CODE = "none"
+    if mode == "off":
+        config.EVENT_CODE = "none"
+        await state.clear()
+        await message.answer(
+            "🛑 Продажи остановлены.\n"
+            "Текущее мероприятие: none\n\n"
+            "Покупка билетов пользователям недоступна."
+        )
+        return
+
+    # Режим: сменить на новое название
     await state.set_state(ChangeEventStates.waiting_for_event_name)
     await message.answer("✍️ Введите *название мероприятия* (видно пользователям).", parse_mode="Markdown")
+
 
 @router.message(ChangeEventStates.waiting_for_event_name)
 async def change_event_set_name(message: Message, state: FSMContext):
