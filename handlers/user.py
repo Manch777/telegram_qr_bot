@@ -17,7 +17,7 @@ from database import (
 router = Router()
 
 # ————— Навигация/экраны —————
-
+_AWAIT_PROMO = set()
 _LAST_MSG: dict[int, int] = {}   # user_id -> last bot screen message_id
 
 def _event_off() -> bool:
