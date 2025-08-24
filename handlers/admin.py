@@ -525,10 +525,8 @@ async def change_event_set_limit(message: Message, state: FSMContext):
 
     # Если раньше было none → стало не none — запускаем рассылку сейчас
     if data.get("_broadcast_needed"):
-        await message.answer("📣 Делаю рассылку подписчикам о новом мероприятии…")
-        # _broadcast_new_event(bot, event_code) — оставь твою реализацию
-        asyncio.create_task(_broadcast_new_event(message.bot, config.EVENT_CODE))
-
+        await message.answer("📣 Сначала рассылаю последний пост канала, затем уведомление с кнопкой…")
+        asyncio.create_task(_broadcast_last_post_then_notice(message.bot, config.EVENT_CODE))
 
 
 # =========================
@@ -623,7 +621,37 @@ async def _broadcast_new_event(bot, event_title: str):
             # игнорируем блокировки и пр.
             await asyncio.sleep(0.05)
 
+async def _broadcast_last_post_then_notice(bot, event_title: str):
+    post_id = await get_meta(LAST_POST_KEY)  # может быть None, тогда просто шлём уведомление
+    subs = await get_all_subscribers()
+    if not subs:
+        return
 
+    # подготовим клавиатуру для уведомления
+    kb_notice = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
+    ])
+
+    for uid, _uname in subs:
+        # 1) копируем последний пост (если известен)
+        if post_id:
+            try:
+                await bot.copy_message(chat_id=uid, from_chat_id=CHANNEL_ID, message_id=int(post_id))
+            except Exception:
+                pass  # игнорируем тех, к кому не доставили
+
+        # 2) отправляем уведомление с кнопкой
+        try:
+            await bot.send_message(
+                uid,
+                f"🔥 Новое мероприятие: {event_title}\n\nБилеты уже доступны — жми ниже 👇",
+                reply_markup=kb_notice
+            )
+        except Exception:
+            pass
+
+        # ограничим скорость
+        await asyncio.sleep(0.05)
 
 # =========================
 # Рассылки поста:

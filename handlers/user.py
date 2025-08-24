@@ -158,6 +158,13 @@ async def back_ticket(callback: CallbackQuery):
 @router.callback_query(F.data == "buy_ticket_menu")
 async def ticket_menu(callback: CallbackQuery):
     await callback.answer()
+
+    # если это нажатие из уведомления о новом событии — удалим САМО уведомление
+    try:
+        await callback.message.delete()
+    except Exception:
+        pass
+
     await add_subscriber(callback.from_user.id, callback.from_user.username)
 
     if _event_off():
