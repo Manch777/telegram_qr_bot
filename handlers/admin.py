@@ -349,6 +349,8 @@ async def reject_payment(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="💳 Оплатить", url=PAYMENT_LINK)],
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid_row:{row_id}")]
+        [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="buy_ticket_menu")],
+
     ])
     sent = await callback.bot.send_message(
         chat_id=row["user_id"],
