@@ -457,6 +457,12 @@ async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int,
     status = await get_paid_status_by_id(row_id)
 
     if status in ("в процессе оплаты"):
+        # откатываем всё, что не "не оплатил", в "не оплатил"
+        if status != "не оплатил":
+            try:
+                await set_paid_status_by_id(row_id, "не оплатил")
+            except Exception:
+                pass        
         try:
             await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
         except Exception:
