@@ -329,21 +329,17 @@ async def payment_confirmation(callback: CallbackQuery):
         )
         return
 
+    await set_paid_status_by_id(row_id, "на проверке")
+
     # Покажем «защищённый» экран ожидания и запомним его message_id
     sent = await _push_screen(
         callback.bot, user.id,
         "⏳ Подтверждение отправлено администратору. Ожидайте одобрения.",
         _back_to_start_kb()
     )
-# защитим этот экран от авто-удаления
+    # защитим этот экран от авто-удаления
     await set_meta(f"review_msg:{user.id}", str(sent.message_id))
 
-    # Покажем экран статуса и «Назад»
-    await _push_screen(
-        callback.bot, user.id,
-        "⏳ Подтверждение отправлено администратору. Ожидайте одобрения.",
-        _back_to_start_kb()
-    )
 
     # Уведомляем назначенного админа
     kb_admin = InlineKeyboardMarkup(inline_keyboard=[
