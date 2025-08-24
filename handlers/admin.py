@@ -261,13 +261,15 @@ async def exit_admin_mode(message: Message):
         return
 
     await message.bot.delete_my_commands(scope=BotCommandScopeChat(chat_id=message.from_user.id))
-    await message.bot.set_my_commands([
-        BotCommand(command="start", description="Начать"),
-        BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
-    ])
-
+    await message.bot.set_my_commands(
+        [
+            BotCommand(command="start", description="Начать"),
+            BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
+        ],
+        scope=BotCommandScopeChat(chat_id=message.from_user.id),  # <-- важен тот же scope
+    )
     await message.answer("↩️ Вы вышли из режима администратора. Команды обновлены.")
-
+    
 # =========================
 # /scanner — открыть веб-сканер
 # =========================
