@@ -88,15 +88,6 @@ async def admin_panel(message: Message):
 
 
 
-@router.message(StateFilter("*"), Command("admin"))
-async def cancel_any_state_and_open_admin(message: Message, state: FSMContext):
-    # доступ только супер-админам
-    if message.from_user.id not in ADMIN_IDS:
-        return
-    # очищаем любое состояние и открываем панель
-    await state.clear()
-    await admin_panel(message)
-
 # =========================
 # Сканирование через WebApp
 # Ожидаем payload вида "row_id:ticket_type"
@@ -723,6 +714,12 @@ async def broadcast_last_cb(callback: CallbackQuery, state: FSMContext):
 
 _SCANNER_META_KEY = "SCANNER_ADMIN_IDS"
 
+def _scan_cancel_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="❌ Отмена", callback_data="scan_access_cancel")]
+    ])
+
+
 
 async def _load_scanner_ids() -> set[int]:
     raw = await get_meta(_SCANNER_META_KEY)
@@ -758,6 +755,8 @@ def _scan_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="✖️ Закрыть",  callback_data="scan_access_close")],
     ])
 
+
+
 @router.callback_query(F.data == "scan_access_menu")
 async def scan_access_menu(callback: CallbackQuery):
     if callback.from_user.id not in config.ADMIN_IDS:
@@ -780,6 +779,16 @@ async def scan_access_view(callback: CallbackQuery):
         text = "\n".join(lines)
     await callback.message.answer(text, reply_markup=_scan_menu_kb())
 
+@router.callback_query(F.data == "scan_access_cancel")
+async def scan_access_cancel(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await state.clear()
+    await callback.answer("Отменено")
+    await callback.message.answer("🔐 Управление доступом к сканеру:", reply_markup=_scan_menu_kb())
+
+
 @router.callback_query(F.data == "scan_access_add")
 async def scan_access_add(callback: CallbackQuery, state: FSMContext):
     if callback.from_user.id not in config.ADMIN_IDS:
@@ -787,26 +796,21 @@ async def scan_access_add(callback: CallbackQuery, state: FSMContext):
         return
     await state.set_state(ScanAccessStates.waiting_for_add_id)
     await callback.message.answer(
-        "Отправьте числовой user_id, которому выдать доступ к сканеру.\n"
-        "Для отмены — /admin"
+        "Отправьте числовой user_id, которому выдать доступ к сканеру.",
+        reply_markup=_scan_cancel_kb()
     )
+
 
 @router.message(ScanAccessStates.waiting_for_add_id)
 async def scan_access_add_id(message: Message, state: FSMContext):
     if message.from_user.id not in config.ADMIN_IDS:
         await state.clear()
         return
-    
-        # локальная отмена
-    if (message.text or "").strip().lower() == "/admin":
-        await state.clear()
-        await admin_panel(message)
-        return
-    
     try:
         uid = int((message.text or "").strip())
     except ValueError:
-        await message.answer("user_id должен быть числом. Попробуйте ещё раз или /admin для отмены.")
+        await message.answer("user_id должен быть числом. Попробуйте снова или нажмите «Отмена».",
+                             reply_markup=_scan_cancel_kb())
         return
 
     ids = await _load_scanner_ids()
@@ -827,26 +831,21 @@ async def scan_access_remove(callback: CallbackQuery, state: FSMContext):
         return
     await state.set_state(ScanAccessStates.waiting_for_remove_id)
     await callback.message.answer(
-        "Отправьте числовой user_id, у которого нужно забрать доступ.\n"
-        "Для отмены — /admin"
+        "Отправьте числовой user_id, у которого нужно забрать доступ.",
+        reply_markup=_scan_cancel_kb()
     )
+
 
 @router.message(ScanAccessStates.waiting_for_remove_id)
 async def scan_access_remove_id(message: Message, state: FSMContext):
     if message.from_user.id not in config.ADMIN_IDS:
         await state.clear()
         return
-    
-        # локальная отмена
-    if (message.text or "").strip().lower() == "/admin":
-        await state.clear()
-        await admin_panel(message)
-        return
-        
     try:
         uid = int((message.text or "").strip())
     except ValueError:
-        await message.answer("user_id должен быть числом. Попробуйте ещё раз или /admin для отмены.")
+        await message.answer("user_id должен быть числом. Попробуйте снова или нажмите «Отмена».",
+                             reply_markup=_scan_cancel_kb())
         return
 
     if uid in config.ADMIN_IDS:
