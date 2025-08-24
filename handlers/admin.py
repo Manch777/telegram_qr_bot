@@ -8,6 +8,7 @@ from openpyxl import Workbook
 from io import BytesIO
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.filters import StateFilter, Command
 from aiogram.types import (
     Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery,
     FSInputFile, BufferedInputFile, BotCommand, BotCommandScopeChat
@@ -84,6 +85,17 @@ async def admin_panel(message: Message):
         return
 
     await message.answer("🚫 У вас нет доступа к панели администратора.")
+
+
+
+@router.message(StateFilter("*"), Command("admin"))
+async def cancel_any_state_and_open_admin(message: Message, state: FSMContext):
+    # доступ только супер-админам
+    if message.from_user.id not in ADMIN_IDS:
+        return
+    # очищаем любое состояние и открываем панель
+    await state.clear()
+    await admin_panel(message)
 
 # =========================
 # Сканирование через WebApp
