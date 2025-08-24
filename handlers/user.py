@@ -12,7 +12,7 @@ from database import (
     count_ticket_type_paid_for_event, count_ticket_type_for_event,
     log_one_plus_one_attempt, add_subscriber,
     get_one_plus_one_limit, remaining_one_plus_one_for_event,
-    set_meta, get_meta,
+    set_meta, get_meta, set_ticket_type_by_id,
 )
 
 router = Router()
@@ -186,6 +186,18 @@ async def ticket_menu(callback: CallbackQuery):
         )
         return
 
+    # создаём черновик покупки: paid="не оплатил", тип ещё не выбран
+    username = callback.from_user.username or "Без ника"
+    draft_row_id = await add_user(
+        user_id=callback.from_user.id,
+        username=username,
+        event_code=config.EVENT_CODE,
+        ticket_type="—"  # или "pending"
+    )
+    #  запомним id черновика для этого пользователя
+    await set_meta(f"draft_row:{callback.from_user.id}", str(draft_row_id))
+
+
     await _show_ticket_menu(callback.bot, callback.from_user.id)
 
 # Билет 1+1
@@ -315,16 +327,37 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
         )
         return
 
+# ... выше проверки _event_off() без изменений ...
+
     user = obj.from_user
     user_id = user.id
     username = user.username or "Без ника"
 
-    row_id = await add_user(
-        user_id=user_id,
-        username=username,
-        event_code=config.EVENT_CODE,
-        ticket_type=ticket_type
-    )
+# пытаемся использовать черновик, созданный при "Оплатить билет"
+    draft_raw = await get_meta(f"draft_row:{user_id}")
+    row_id = None
+    if draft_raw:
+        try:
+            row_id = int(draft_raw)
+        except Exception:
+            row_id = None
+
+    if row_id:
+    # проставляем выбранный тип в уже созданную запись
+        await set_ticket_type_by_id(row_id, ticket_type)
+    else:
+    # фолбэк: на всякий случай создадим новую (если меты нет)
+        row_id = await add_user(
+            user_id=user_id,
+            username=username,
+            event_code=config.EVENT_CODE,
+            ticket_type=ticket_type
+        )
+        await set_meta(f"draft_row:{user_id}", str(row_id))
+
+# пользователь начал оформление — статус "в процессе оплаты"
+    await set_paid_status_by_id(row_id, "в процессе оплаты")
+
 
     text = (
         f"Тип билета: {ticket_type}\n"
@@ -423,7 +456,7 @@ async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int,
     from database import get_paid_status_by_id
     status = await get_paid_status_by_id(row_id)
 
-    if status in ("не оплатил"):
+    if status in ("в процессе оплаты"):
         try:
             await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
         except Exception:
