@@ -796,6 +796,13 @@ async def scan_access_add_id(message: Message, state: FSMContext):
     if message.from_user.id not in config.ADMIN_IDS:
         await state.clear()
         return
+    
+        # локальная отмена
+    if (message.text or "").strip().lower() == "/admin":
+        await state.clear()
+        await admin_panel(message)
+        return
+    
     try:
         uid = int((message.text or "").strip())
     except ValueError:
@@ -829,6 +836,13 @@ async def scan_access_remove_id(message: Message, state: FSMContext):
     if message.from_user.id not in config.ADMIN_IDS:
         await state.clear()
         return
+    
+        # локальная отмена
+    if (message.text or "").strip().lower() == "/admin":
+        await state.clear()
+        await admin_panel(message)
+        return
+        
     try:
         uid = int((message.text or "").strip())
     except ValueError:
