@@ -331,7 +331,8 @@ async def approve_payment(callback: CallbackQuery):
         except Exception:
             pass
 # очистим мету (сигнал, что защита снята)
-await set_meta(f"review_msg:{uid}", "")       
+    await set_meta(f"review_msg:{uid}", "")
+    
 # =========================
 # Отклонение оплаты по row_id
 # =========================
@@ -365,7 +366,8 @@ async def reject_payment(callback: CallbackQuery):
             await callback.bot.delete_message(uid, int(protected_id_raw))
         except Exception:
             pass
-await set_meta(f"review_msg:{uid}", "")
+    await set_meta(f"review_msg:{uid}", "")
+    
     # ⏱️ Запускаем новый 5-минутный таймер после отклонения
     asyncio.create_task(
         _expire_payment_after_admin(
