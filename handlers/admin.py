@@ -818,4 +818,4 @@ async def scan_access_menu_cmd(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("Нет прав.")
         return
-    await message.answer("🔐 Управление доступом к сканеру:", reply_markup=_scan_menu_kb()
+    await message.answer("🔐 Управление доступом к сканеру:", reply_markup=_scan_menu_kb())
