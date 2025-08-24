@@ -161,6 +161,10 @@ async def count_ticket_type_for_event(event_code: str, ticket_type: str) -> int:
 # =============================================================================
 # Агрегаты / списки (по всем покупкам)
 # =============================================================================
+async def set_ticket_type_by_id(row_id: int, ticket_type: str):
+    await database.execute(
+        users.update().where(users.c.id == row_id).values(ticket_type=ticket_type)
+    )
 
 async def count_registered():
     """Сколько всего строк (покупок) создано."""
