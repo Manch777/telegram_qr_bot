@@ -55,6 +55,7 @@ async def admin_panel(message: Message):
             BotCommand(command="broadcast_last", description="📣 Разослать последний пост"),  # <-- добавили
             BotCommand(command="wishers", description="📝 Кто хотел 1+1"),
             BotCommand(command="/stats_this", description="📊 Cтатистика о количестве проданных билетов"),
+            BotCommand(command="/scan_access_menu", description="🔐 Управление доступом к сканеру"),            
             BotCommand(command="export_users", description="📤 Выгрузить базу (все)"),
             BotCommand(command="export_users_this", description="📤 Выгрузить базу (текущее)"),
             BotCommand(command="clear_db", description="Очистить базу"),
@@ -271,7 +272,7 @@ async def exit_admin_mode(message: Message):
 # =========================
 @router.message(lambda msg: msg.text == "/scanner")
 async def scanner_command(message: Message):
-    if not is_scanner_admin(message.from_user.id):
+    if not _can_use_scanner(message.from_user.id):
         await message.answer("🚫 Нет прав на использование сканера.")
         return
 
@@ -672,3 +673,141 @@ async def broadcast_last_cb(callback: CallbackQuery, state: FSMContext):
     await state.set_state(BroadcastLastStates.waiting_for_password)
     await callback.message.answer("🔒 Введите пароль для рассылки последнего поста канала:")
 
+# =========================
+# Добавление админов:
+# =========================
+
+_SCANNER_META_KEY = "SCANNER_ADMIN_IDS"
+
+
+async def _load_scanner_ids() -> set[int]:
+    raw = await get_meta(_SCANNER_META_KEY)
+    if raw:
+        try:
+            return set(int(x) for x in json.loads(raw))
+        except Exception:
+            return set()
+    # фолбэк на .env (если мета ещё не создана)
+    try:
+        return set(int(x) for x in getattr(config, "SCANNER_ADMIN_IDS", []))
+    except Exception:
+        return set()
+
+async def _save_scanner_ids(ids: set[int]) -> None:
+    await set_meta(_SCANNER_META_KEY, json.dumps(sorted(list(ids))))
+
+async def _can_use_scanner(user_id: int) -> bool:
+    if user_id in config.ADMIN_IDS:
+        return True
+    ids = await _load_scanner_ids()
+    return user_id in ids
+
+class ScanAccessStates(StatesGroup):
+    waiting_for_add_id = State()
+    waiting_for_remove_id = State()
+
+def _scan_menu_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👥 Посмотреть админов", callback_data="scan_access_view")],
+        [InlineKeyboardButton(text="➕ Добавить", callback_data="scan_access_add"),
+         InlineKeyboardButton(text="➖ Убрать",   callback_data="scan_access_remove")],
+        [InlineKeyboardButton(text="✖️ Закрыть",  callback_data="scan_access_close")],
+    ])
+
+@router.callback_query(F.data == "scan_access_menu")
+async def scan_access_menu(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.message.answer("🔐 Управление доступом к сканеру:", reply_markup=_scan_menu_kb())
+
+@router.callback_query(F.data == "scan_access_view")
+async def scan_access_view(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    ids = await _load_scanner_ids()
+    if not ids:
+        text = "Сканер-админов нет."
+    else:
+        lines = ["👥 Сканер-админы:"]
+        for uid in sorted(ids):
+            lines.append(f"• {uid}")
+        text = "\n".join(lines)
+    await callback.message.answer(text, reply_markup=_scan_menu_kb())
+
+@router.callback_query(F.data == "scan_access_add")
+async def scan_access_add(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await state.set_state(ScanAccessStates.waiting_for_add_id)
+    await callback.message.answer(
+        "Отправьте числовой user_id, которому выдать доступ к сканеру.\n"
+        "Для отмены — /admin"
+    )
+
+@router.message(ScanAccessStates.waiting_for_add_id)
+async def scan_access_add_id(message: Message, state: FSMContext):
+    if message.from_user.id not in config.ADMIN_IDS:
+        await state.clear()
+        return
+    try:
+        uid = int((message.text or "").strip())
+    except ValueError:
+        await message.answer("user_id должен быть числом. Попробуйте ещё раз или /admin для отмены.")
+        return
+
+    ids = await _load_scanner_ids()
+    if uid in config.ADMIN_IDS or uid in ids:
+        await message.answer("✅ У пользователя уже есть доступ к сканеру.")
+    else:
+        ids.add(uid)
+        await _save_scanner_ids(ids)
+        await message.answer(f"✅ Выдан доступ к сканеру: {uid}")
+
+    await state.clear()
+    await message.answer("Готово. Вернуться в меню управления:", reply_markup=_scan_menu_kb())
+
+@router.callback_query(F.data == "scan_access_remove")
+async def scan_access_remove(callback: CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await state.set_state(ScanAccessStates.waiting_for_remove_id)
+    await callback.message.answer(
+        "Отправьте числовой user_id, у которого нужно забрать доступ.\n"
+        "Для отмены — /admin"
+    )
+
+@router.message(ScanAccessStates.waiting_for_remove_id)
+async def scan_access_remove_id(message: Message, state: FSMContext):
+    if message.from_user.id not in config.ADMIN_IDS:
+        await state.clear()
+        return
+    try:
+        uid = int((message.text or "").strip())
+    except ValueError:
+        await message.answer("user_id должен быть числом. Попробуйте ещё раз или /admin для отмены.")
+        return
+
+    if uid in config.ADMIN_IDS:
+        await message.answer("🚫 Нельзя отозвать доступ у супер-админа (ADMIN_IDS).")
+    else:
+        ids = await _load_scanner_ids()
+        if uid not in ids:
+            await message.answer("ℹ️ У пользователя и так нет прав сканера.")
+        else:
+            ids.remove(uid)
+            await _save_scanner_ids(ids)
+            await message.answer(f"✅ Доступ к сканеру отозван: {uid}")
+
+    await state.clear()
+    await message.answer("Готово. Вернуться в меню управления:", reply_markup=_scan_menu_kb())
+
+@router.callback_query(F.data == "scan_access_close")
+async def scan_access_close(callback: CallbackQuery):
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.message.answer("Закрыто.")
