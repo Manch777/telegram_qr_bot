@@ -265,6 +265,8 @@ async def exit_admin_mode(message: Message):
         [
             BotCommand(command="start", description="Начать"),
             BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
+            BotCommand(command="admin", description="🛡 Режим администратора"),
+
         ],
         scope=BotCommandScopeChat(chat_id=message.from_user.id),  # <-- важен тот же scope
     )
