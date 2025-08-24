@@ -627,8 +627,13 @@ async def _broadcast_last_post_then_notice(bot, event_title: str):
     if not subs:
         return
 
-    # подготовим клавиатуру для уведомления
-    kb_notice = InlineKeyboardMarkup(inline_keyboard=[
+    # Клавиатуры
+    kb_notice_subscribed = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
+    ])
+    kb_notice_unsubscribed = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="✅ Подписаться на Telegram", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}")],
+        [InlineKeyboardButton(text="📷 Подписаться на Instagram", url=INSTAGRAM_LINK)],
         [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
     ])
 
@@ -640,18 +645,31 @@ async def _broadcast_last_post_then_notice(bot, event_title: str):
             except Exception:
                 pass  # игнорируем тех, к кому не доставили
 
-        # 2) отправляем уведомление с кнопкой
+        # 2) проверяем подписку на канал
+        subscribed = False
+        try:
+            member = await bot.get_chat_member(CHANNEL_ID, uid)
+            status = getattr(member, "status", None)
+            subscribed = status in ("member", "administrator", "creator")
+        except Exception:
+            # не смогли проверить — считаем, что не подписан
+            subscribed = False
+
+        kb = kb_notice_subscribed if subscribed else kb_notice_unsubscribed
+
+        # 3) отправляем уведомление
         try:
             await bot.send_message(
                 uid,
                 f"🔥 Новое мероприятие: {event_title}\n\nБилеты уже доступны — жми ниже 👇",
-                reply_markup=kb_notice
+                reply_markup=kb
             )
         except Exception:
             pass
 
-        # ограничим скорость
+        # ограничим скорость (≈20 сообщений/сек)
         await asyncio.sleep(0.05)
+
 
 # =========================
 # Рассылки поста:
