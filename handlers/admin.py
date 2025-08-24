@@ -602,35 +602,23 @@ async def _broadcast_new_event(bot, event_title: str):
     subs = await get_all_subscribers()
     if not subs:
         return
-
-    post_id = await get_meta(LAST_POST_KEY)  # может быть None
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подписаться на Telegram", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}")],
         [InlineKeyboardButton(text="📷 Подписаться на Instagram", url=INSTAGRAM_LINK)],
-        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]        
     ])
-    notice_text = (
+    text = (
         f"🔥 Новое мероприятие: {event_title}\n\n"
         "Билеты уже доступны — не забудь купить👇"
     )
-
+    # Telegram: не чаще ~30 сообщений/сек. Пойдём мягко — 20/сек.
     for uid, _uname in subs:
-        # 1) пост канала (НЕ удаляем потом, он живёт отдельно)
-        if post_id:
-            try:
-                await bot.copy_message(chat_id=uid, from_chat_id=CHANNEL_ID, message_id=int(post_id))
-                await asyncio.sleep(0.05)
-            except Exception:
-                # игнорируем ошибки копирования
-                await asyncio.sleep(0.02)
-
-        # 2) уведомление с кнопками — запомним его id, чтобы потом удалить
         try:
-            sent = await bot.send_message(uid, notice_text, reply_markup=kb)
-            await set_meta(f"notice_msg:{uid}", str(sent.message_id))
+            await bot.send_message(uid, text, reply_markup=kb)
             await asyncio.sleep(0.05)
         except Exception:
-            await asyncio.sleep(0.02)
+            # игнорируем блокировки и пр.
+            await asyncio.sleep(0.05)
 
 
 
@@ -793,18 +781,11 @@ async def scan_access_add(callback: CallbackQuery, state: FSMContext):
 
 @router.message(ScanAccessStates.waiting_for_add_id)
 async def scan_access_add_id(message: Message, state: FSMContext):
-    # 👉 если пришла команда — отменяем и открываем /admin
-    txt = (message.text or "").strip()
-    if txt.startswith("/"):
-        await state.clear()
-        await admin_panel(message)   # вызвать хендлер /admin напрямую
-        return
-
     if message.from_user.id not in config.ADMIN_IDS:
         await state.clear()
         return
     try:
-        uid = int(txt)
+        uid = int((message.text or "").strip())
     except ValueError:
         await message.answer("user_id должен быть числом. Попробуйте ещё раз или /admin для отмены.")
         return
@@ -833,18 +814,11 @@ async def scan_access_remove(callback: CallbackQuery, state: FSMContext):
 
 @router.message(ScanAccessStates.waiting_for_remove_id)
 async def scan_access_remove_id(message: Message, state: FSMContext):
-    # 👉 если пришла команда — отменяем и открываем /admin
-    txt = (message.text or "").strip()
-    if txt.startswith("/"):
-        await state.clear()
-        await admin_panel(message)
-        return
-
     if message.from_user.id not in config.ADMIN_IDS:
         await state.clear()
         return
     try:
-        uid = int(txt)
+        uid = int((message.text or "").strip())
     except ValueError:
         await message.answer("user_id должен быть числом. Попробуйте ещё раз или /admin для отмены.")
         return

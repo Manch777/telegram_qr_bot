@@ -101,39 +101,30 @@ async def back_from_reject(callback: CallbackQuery):
 
 async def _push_screen(bot, chat_id: int, text: str, kb: InlineKeyboardMarkup):
     """Удаляет предыдущий экран пользователя и отправляет новый.
-       - Удаляет 'уведомление о новом событии' (notice_msg:{uid}), если есть
-       - Не удаляет скопированный пост канала
-       - Не удаляет «защищённый» экран ожидания подтверждения (review_msg:{uid})
-    """
-    # 1) убрать уведомление о новом событии (если висит)
-    notice_raw = await get_meta(f"notice_msg:{chat_id}")
-    if notice_raw:
-        try:
-            await bot.delete_message(chat_id, int(notice_raw))
-        except Exception:
-            pass
-        # очистить мету, чтобы второй раз не пытаться
-        await set_meta(f"notice_msg:{chat_id}", "")
-
-    # 2) не трогаем защищённый экран ожидания оплаты
-    protected_id_raw = await get_meta(f"review_msg:{chat_id}")
+       НО не удаляет «защищённый» экран ожидания подтверждения."""
+    protected_id_raw = await get_meta(f"review_msg:{chat_id}")  # храним id «ожидания»
     try:
         protected_id = int(protected_id_raw) if protected_id_raw else None
     except Exception:
         protected_id = None
 
-    # 3) удалить прошлый «экран» из _LAST_MSG, если он не защищён
     last_id = _LAST_MSG.get(chat_id)
+    # удаляем предыдущий экран, только если он не «защищённый»
     if last_id and (protected_id is None or last_id != protected_id):
         try:
             await bot.delete_message(chat_id, last_id)
         except Exception:
             pass
 
-    # 4) отправить новый экран
     sent = await bot.send_message(chat_id, text, reply_markup=kb)
     _LAST_MSG[chat_id] = sent.message_id
     return sent
+
+async def _show_root(bot, chat_id: int):
+    return await _push_screen(bot, chat_id, _root_text(), _root_kb())
+
+async def _show_ticket_menu(bot, chat_id: int):
+    return await _push_screen(bot, chat_id, "Выбери тип билета:", _ticket_menu_kb())
 
 # ————— Логика User —————
 
