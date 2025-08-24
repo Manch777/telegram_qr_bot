@@ -321,7 +321,17 @@ async def approve_payment(callback: CallbackQuery):
     )
 
     await callback.message.edit_text(f"✅ Подтверждено. QR по билету #{row_id} отправлен пользователю.")
-
+    
+    # Снимем «защиту» и удалим экран ожидания, если он ещё висит
+    uid = row["user_id"]
+    protected_id_raw = await get_meta(f"review_msg:{uid}")
+    if protected_id_raw:
+        try:
+            await callback.bot.delete_message(uid, int(protected_id_raw))
+        except Exception:
+            pass
+# очистим мету (сигнал, что защита снята)
+await set_meta(f"review_msg:{uid}", "")       
 # =========================
 # Отклонение оплаты по row_id
 # =========================
@@ -348,6 +358,14 @@ async def reject_payment(callback: CallbackQuery):
         reply_markup=kb
     )
     
+    uid = row["user_id"]
+    protected_id_raw = await get_meta(f"review_msg:{uid}")
+    if protected_id_raw:
+        try:
+            await callback.bot.delete_message(uid, int(protected_id_raw))
+        except Exception:
+            pass
+await set_meta(f"review_msg:{uid}", "")
     # ⏱️ Запускаем новый 5-минутный таймер после отклонения
     asyncio.create_task(
         _expire_payment_after_admin(

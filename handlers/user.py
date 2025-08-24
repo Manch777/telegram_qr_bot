@@ -12,6 +12,7 @@ from database import (
     count_ticket_type_paid_for_event, count_ticket_type_for_event,
     log_one_plus_one_attempt, add_subscriber,
     get_one_plus_one_limit, remaining_one_plus_one_for_event,
+    set_meta, get_meta,
 )
 
 router = Router()
@@ -63,13 +64,22 @@ def _payment_kb(row_id: int) -> InlineKeyboardMarkup:
     ])
 
 async def _push_screen(bot, chat_id: int, text: str, kb: InlineKeyboardMarkup):
-    """Удаляет предыдущий экран пользователя и отправляет новый."""
+    """Удаляет предыдущий экран пользователя и отправляет новый.
+       НО не удаляет «защищённый» экран ожидания подтверждения."""
+    protected_id_raw = await get_meta(f"review_msg:{chat_id}")  # храним id «ожидания»
+    try:
+        protected_id = int(protected_id_raw) if protected_id_raw else None
+    except Exception:
+        protected_id = None
+
     last_id = _LAST_MSG.get(chat_id)
-    if last_id:
+    # удаляем предыдущий экран, только если он не «защищённый»
+    if last_id and (protected_id is None or last_id != protected_id):
         try:
             await bot.delete_message(chat_id, last_id)
         except Exception:
             pass
+
     sent = await bot.send_message(chat_id, text, reply_markup=kb)
     _LAST_MSG[chat_id] = sent.message_id
     return sent
@@ -197,8 +207,7 @@ async def ask_promocode(callback: CallbackQuery):
 
     _AWAIT_PROMO.add(callback.from_user.id)
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="back:ticket")],
-        [InlineKeyboardButton(text="❌ Отмена", callback_data="promo_cancel")],
+        [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="promo_cancel")],
     ])
     await _push_screen(callback.bot, callback.from_user.id, "Введите ваш промокод одним сообщением:", kb)
 
@@ -320,7 +329,14 @@ async def payment_confirmation(callback: CallbackQuery):
         )
         return
 
-    await set_paid_status_by_id(row_id, "на проверке")
+    # Покажем «защищённый» экран ожидания и запомним его message_id
+    sent = await _push_screen(
+        callback.bot, user.id,
+        "⏳ Подтверждение отправлено администратору. Ожидайте одобрения.",
+        _back_to_start_kb()
+    )
+# защитим этот экран от авто-удаления
+    await set_meta(f"review_msg:{user.id}", str(sent.message_id))
 
     # Покажем экран статуса и «Назад»
     await _push_screen(
