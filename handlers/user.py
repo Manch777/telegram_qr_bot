@@ -423,17 +423,16 @@ async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int,
     from database import get_paid_status_by_id
     status = await get_paid_status_by_id(row_id)
 
-    if status in ("не оплатил", "отклонено"):
+    if status in ("не оплатил"):
         try:
             await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
         except Exception:
             pass
-        
-        kb = await _show_ticket_menu(bot, chat_id)
-        
-        await bot.send_message(
-            chat_id,
+
+        # показываем уведомление + то же меню выбора билета
+        kb = await _ticket_menu_kb()
+        await _push_screen(
+            bot, chat_id,
             "⏰ Время оплаты истекло.\nВыберите тип билета заново:",
-            reply_markup=kb
+            kb
         )
-        
