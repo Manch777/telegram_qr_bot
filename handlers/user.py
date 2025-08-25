@@ -36,7 +36,7 @@ def _root_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Подписаться на Telegram", url=f"https://t.me/{CHANNEL_ID.lstrip('@')}")],
         [InlineKeyboardButton(text="📷 Подписаться на Instagram", url=INSTAGRAM_LINK)],
-        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="ticket_1plus1")]
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
     ])
 
 async def _ticket_menu_kb() -> InlineKeyboardMarkup:
@@ -151,7 +151,7 @@ async def _notify_wishers_1p1_available(bot, event_code: str):
         return
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")],
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="ticket_1plus1")],
         [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="back:ticket")],
     ])
 
