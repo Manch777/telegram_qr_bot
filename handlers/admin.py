@@ -87,6 +87,7 @@ def _kb_analytics() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📊 Статистика", callback_data="an:report")],
         [InlineKeyboardButton(text="📊 Проданные билеты (текущее)", callback_data="an:stats_this")],
         [InlineKeyboardButton(text="📝 Кто хотел 1+1", callback_data="an:wishers")],
+        [InlineKeyboardButton(text="💰 Выручка", callback_data="an:revenue")],   # ← добавили
         [InlineKeyboardButton(text="📤 Выгрузить (текущее)", callback_data="an:export_this")],
         [InlineKeyboardButton(text="📤 Выгрузить (все)", callback_data="an:export_all")],
     ])
@@ -1190,6 +1191,103 @@ async def _load_event_prices(event_code: str) -> dict[str, int] | None:
     except Exception:
         return None
 
+def _fmt_amount(n: int) -> str:
+    return f"{n:,}".replace(",", " ")
+
+def _canon_type(t: str) -> str:
+    s = (t or "").strip().lower()
+    if s == "1+1":
+        return "1+1"
+    if s == "single":
+        return "single"
+    # всё остальное считаем промокодами
+    return "promocode"
+
+async def _calc_revenue_for_event(event_code: str) -> tuple[int, int]:
+    """
+    Возвращает (total_revenue, missing_price_count) по одному событию.
+    Суммируем только записи с paid == 'оплатил'.
+    Цена берётся из bot_meta: prices:<event_code> (ключи: '1+1', 'single', 'promocode').
+    """
+    if not event_code or event_code.strip().lower() == "none":
+        return 0, 0
+
+    rows = await get_all_users_full(event_code)
+    prices = await _load_event_prices(event_code) or {}
+    total = 0
+    missing = 0
+
+    for r in rows or []:
+        paid = (r.get("paid") or "").strip().lower()
+        if paid != "оплатил":
+            continue
+        tt = _canon_type(r.get("ticket_type"))
+        price = prices.get(tt)
+        if isinstance(price, int):
+            total += price
+        else:
+            missing += 1
+    return total, missing
+
+async def _calc_revenue_all_events() -> tuple[int, int]:
+    """
+    Возвращает (total_revenue_all, missing_price_count_all) по всем событиям.
+    Для каждого события берём свои prices:<event_code>.
+    """
+    rows = await get_all_users_full(None)
+    total = 0
+    missing = 0
+    cache: dict[str, dict] = {}
+
+    for r in rows or []:
+        paid = (r.get("paid") or "").strip().lower()
+        if paid != "оплатил":
+            continue
+
+        ev = (r.get("event_code") or "").strip()
+        if not ev or ev.lower() == "none":
+            continue
+
+        if ev not in cache:
+            cache[ev] = await _load_event_prices(ev) or {}
+
+        tt = _canon_type(r.get("ticket_type"))
+        price = cache[ev].get(tt)
+        if isinstance(price, int):
+            total += price
+        else:
+            missing += 1
+
+    return total, missing
+
+@router.callback_query(F.data == "an:revenue")
+async def cb_an_revenue(callback: CallbackQuery):
+    if not is_full_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer("Считаю…", show_alert=False)
+
+    cur_ev = config.EVENT_CODE
+    cur_total, cur_missing = await _calc_revenue_for_event(cur_ev)
+    all_total, all_missing = await _calc_revenue_all_events()
+
+    lines = ["💰 Выручка"]
+    if cur_ev and cur_ev.strip().lower() != "none":
+        line = f"Текущее мероприятие «{cur_ev}»: {_fmt_amount(cur_total)} ₽"
+        if cur_missing:
+            line += f" (без цены: {cur_missing})"
+        lines.append(line)
+    else:
+        lines.append("Текущее мероприятие: none (0 ₽)")
+
+    line = f"Все мероприятия: {_fmt_amount(all_total)} ₽"
+    if all_missing:
+        line += f" (без цены: {all_missing})"
+    lines.append(line)
+
+    await callback.message.answer("\n".join(lines))
+
+
 async def _save_event_promocodes(event_code: str, codes: list[str]):
     await set_meta(f"promocodes:{event_code}", json.dumps(codes, ensure_ascii=False))
 
@@ -1215,8 +1313,7 @@ async def _send_report_to(bot, chat_id: int):
         f"👥 Подписчиков в канале: {chat_count}\n"
         f"👤 Создано покупок: {total}\n"
         f"💰 Оплачено: {paid_count}\n"
-        f"✅ Пришли: {active}\n"
-        f"❌ Не пришли: {inactive}"
+        f"✅ Пришли: {active}"
     )
 
 async def _send_stats_this_to(bot, chat_id: int):
