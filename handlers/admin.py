@@ -260,20 +260,27 @@ async def ticket_stats_this(message: Message):
 # =========================
 @router.message(lambda msg: msg.text == "/exit_admin")
 async def exit_admin_mode(message: Message):
-    if not await _can_use_scanner(message.from_user.id):
-        return
+    uid = message.from_user.id
 
-    await message.bot.delete_my_commands(scope=BotCommandScopeChat(chat_id=message.from_user.id))
-    await message.bot.set_my_commands(
-        [
-            BotCommand(command="start", description="Начать"),
-            BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
-            BotCommand(command="admin", description="🛡 Режим администратора"),
+    # Сбрасываем команды для этого чата
+    try:
+        await message.bot.delete_my_commands(scope=BotCommandScopeChat(chat_id=uid))
+    except Exception:
+        pass
 
-        ],
-        scope=BotCommandScopeChat(chat_id=message.from_user.id),  # <-- важен тот же scope
-    )
+    # Базовые команды доступны всем
+    cmds = [
+        BotCommand(command="start", description="Начать"),
+        BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
+    ]
+
+    # «Админ»-кнопку даём только супер-админу или сканер-админу
+    if is_full_admin(uid) or await _can_use_scanner(uid):
+        cmds.append(BotCommand(command="admin", description="🛡 Режим администратора"))
+
+    await message.bot.set_my_commands(cmds, scope=BotCommandScopeChat(chat_id=uid))
     await message.answer("↩️ Вы вышли из режима администратора. Команды обновлены.")
+
     
 # =========================
 # /scanner — открыть веб-сканер

@@ -465,7 +465,7 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
     price_line = f"\nЦена: {price}" if price is not None else ""
 
     text = (
-        f"{pretty_type}\n"
+        f"Тип билета: {pretty_type}\n"
         f"Мероприятие: {config.EVENT_CODE}"
         f"{price_line}\n\n"
         "После оплаты нажми «Я оплатил».\n"
