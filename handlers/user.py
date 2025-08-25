@@ -2,6 +2,7 @@
 from aiogram import Router, F
 import config
 import asyncio
+import json
 from aiogram.filters import CommandStart
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
@@ -351,6 +352,26 @@ async def handle_promocode(message: Message):
     # вместо "promocode" пишем сам код
     await _present_payment(message, ticket_type=code, from_message=True)
 
+
+async def _price_for_ticket(ticket_type: str) -> int | None:
+    """
+    Берём цены из bot_meta по ключу prices:<EVENT_CODE>, который писал админ в /change_event.
+    Формат: {"1+1": 1000, "single": 700, "promocode": 500}
+    Для конкретного промокода берём цену "promocode".
+    """
+    raw = await get_meta(f"prices:{config.EVENT_CODE}")
+    try:
+        prices = json.loads(raw) if raw else {}
+    except Exception:
+        prices = {}
+
+    key = "1+1" if ticket_type == "1+1" else ("single" if ticket_type == "single" else "promocode")
+    val = prices.get(key)
+    try:
+        return int(val)
+    except Exception:
+        return None
+
 # Экран оплаты (создаёт покупку)
 async def _present_payment(obj, ticket_type: str, from_message: bool = False):
     # защита от гонок
@@ -395,9 +416,18 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
     await set_paid_status_by_id(row_id, "в процессе оплаты")
 
 
+    # Человекочитаемое название для текста
+    title_map = {"single": "1 билет", "1+1": "Билет 1+1"}
+    pretty_type = title_map.get(ticket_type, f"Промокод «{ticket_type}»")
+
+    # Цена
+    price = await _price_for_ticket(ticket_type)
+    price_line = f"\nЦена: {price}" if price is not None else ""
+
     text = (
-        f"Тип билета: {ticket_type}\n"
-        f"Мероприятие: {config.EVENT_CODE}\n\n"
+        f"{pretty_type}\n"
+        f"Мероприятие: {config.EVENT_CODE}"
+        f"{price_line}\n\n"
         "После оплаты нажми «Я оплатил».\n"
         "⏳ Ссылка на оплату действует 5 минут!\n"
         "❗️Обязательно укажи свой Telegram-ник в комментариях платежа."
