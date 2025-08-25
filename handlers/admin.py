@@ -420,8 +420,10 @@ class ChangeEventStates(StatesGroup):
     waiting_for_password = State()
     waiting_for_event_name = State()
     waiting_for_1p1_limit = State()   # <— новое состояние
-    waiting_for_prices = State()        # <— новое
-    waiting_for_promocodes = State()    # <— новое
+    waiting_for_price_1p1 = State()
+    waiting_for_price_single = State()
+    waiting_for_price_promocode = State()
+    waiting_for_promocode_list = State()
     
 def _normalize_event_name(raw: str) -> str:
     # Прибираем лишние пробелы, убираем перевод строки по краям
@@ -545,77 +547,117 @@ async def change_event_set_limit(message: Message, state: FSMContext):
     used = await count_one_plus_one_taken(config.EVENT_CODE)
     left = max(qty - used, 0)
 
-    # ➜ сразу переходим к ценам
-    await state.set_state(ChangeEventStates.waiting_for_prices)
+    # Короткий фидбек и переходим к ценам
     await message.answer(
-        "Укажи *цены* для типов билетов (руб.), формат по строкам или через запятую:\n"
-        "`1+1: 1500`\n`single: 1000`\n`promocode: 800`\n\n"
-        "_Любые отсутствующие типы можно не указывать._",
-        parse_mode="Markdown"
+        "✅ Лимит 1+1 сохранён.\n"
+        f"Лимит: {qty}"
     )
 
+    await state.update_data(_limit_qty=qty)
+    await state.set_state(ChangeEventStates.waiting_for_price_1p1)
+    await message.answer("💵 Введите цену для билета *1+1* (целое число):", parse_mode="Markdown
 
-@router.message(ChangeEventStates.waiting_for_prices)
-async def change_event_set_prices(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
-        await state.clear()
-        return
+@router.message(ChangeEventStates.waiting_for_price_1p1)
+async def change_event_price_1p1(message: Message, state: FSMContext):
     try:
-        prices = _parse_prices(message.text or "")
-    except ValueError as e:
-        await message.answer(f"⚠️ {e}\nПопробуйте снова (пример: `1+1:1500, single:1000, promocode:800`).",
-                             parse_mode="Markdown")
+        price = int((message.text or "").strip())
+        if price < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("⚠️ Цена должна быть целым числом ≥ 0. Попробуйте ещё раз.")
         return
 
-    await _save_event_prices(config.EVENT_CODE, prices or {})
-    await state.set_state(ChangeEventStates.waiting_for_promocodes)
+    await state.update_data(price_1p1=price)
+    await state.set_state(ChangeEventStates.waiting_for_price_single)
+    await message.answer("💵 Введите цену для билета *single* (целое число):", parse_mode="Markdown")
+
+
+@router.message(ChangeEventStates.waiting_for_price_single)
+async def change_event_price_single(message: Message, state: FSMContext):
+    try:
+        price = int((message.text or "").strip())
+        if price < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("⚠️ Цена должна быть целым числом ≥ 0. Попробуйте ещё раз.")
+        return
+
+    await state.update_data(price_single=price)
+    await state.set_state(ChangeEventStates.waiting_for_price_promocode)
+    await message.answer("💵 Введите цену для билета *promocode* (целое число):", parse_mode="Markdown")
+
+
+@router.message(ChangeEventStates.waiting_for_price_promocode)
+async def change_event_price_promocode(message: Message, state: FSMContext):
+    try:
+        price = int((message.text or "").strip())
+        if price < 0:
+            raise ValueError
+    except ValueError:
+        await message.answer("⚠️ Цена должна быть целым числом ≥ 0. Попробуйте ещё раз.")
+        return
+
+    await state.update_data(price_promocode=price)
+    await state.set_state(ChangeEventStates.waiting_for_promocode_list)
     await message.answer(
-        "Теперь отправь *все доступные промокоды* через запятую.\n"
-        "Если промокодов нет — просто отправь `-`.",
-        parse_mode="Markdown"
+        "🧾 Отправьте *список промокодов* через запятую (например: VIP10, EARLY, TEST).\n"
+        "Если промокодов нет — отправьте «-».",
+        parse_mode="Markdown",
     )
 
-
-@router.message(ChangeEventStates.waiting_for_promocodes)
-async def change_event_set_promocodes(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
-        await state.clear()
-        return
-
-    text = (message.text or "").strip()
-    codes = [] if text in ("-", "—", "") else _parse_promocodes(text)
-    await _save_event_promocodes(config.EVENT_CODE, codes)
-
-    # итоги
-    prices = await _load_event_prices(config.EVENT_CODE) or {}
-    limit = await get_one_plus_one_limit(config.EVENT_CODE)
-    used = await count_one_plus_one_taken(config.EVENT_CODE)
-    left = max((limit or 0) - (used or 0), 0)
-
-    await state.clear()
-    lines = [
-        "✅ Мероприятие обновлено!",
-        f"Текущее: {config.EVENT_CODE}",
-        f"Лимит 1+1: {limit}",
-        f"Уже занято: {used}",
-        f"Осталось: {left}",
-        "",
-        "💵 Цены:",
-        f"• 1+1: {prices.get('1+1', '—')}",
-        f"• single: {prices.get('single', '—')}",
-        f"• promocode: {prices.get('promocode', '—')}",
-        "",
-        f"🏷 Промокоды: {', '.join(codes) if codes else '—'}",
-    ]
-    await message.answer("\n".join(lines))
-
+@router.message(ChangeEventStates.waiting_for_promocode_list)
+async def change_event_promocodes(message: Message, state: FSMContext):
     data = await state.get_data()
+    new_event = data.get("_new_event_code", config.EVENT_CODE)
+
+    raw = (message.text or "").strip()
+    if raw in ("-", "—", "нет", "Нет", "no", "No", ""):
+        codes = []
+    else:
+        codes = [c.strip().upper() for c in raw.split(",") if c.strip()]
+
+    # Соберём цены
+    prices = {
+        "1+1": int(data.get("price_1p1", 0)),
+        "single": int(data.get("price_single", 0)),
+        "promocode": int(data.get("price_promocode", 0)),
+    }
+
+    # Сохраняем в bot_meta (per-event)
+    # ключи: prices:<EVENT_CODE> и promocodes:<EVENT_CODE>
+    try:
+        await set_meta(f"prices:{new_event}", json.dumps(prices, ensure_ascii=False))
+        await set_meta(f"promocodes:{new_event}", json.dumps(codes, ensure_ascii=False))
+    except Exception:
+        # не падаем в случае мелких проблем БД
+        pass
+
+    limit_qty = int(data.get("_limit_qty", 0))
+    used = await count_one_plus_one_taken(new_event)
+    left = max(limit_qty - used, 0)
+
+    # подчистим FSM
+    broadcast_needed = bool(data.get("_broadcast_needed"))
     await state.clear()
 
-    # Если раньше было none → стало не none — запускаем рассылку сейчас
-    if data.get("_broadcast_needed"):
+    # Итог
+    pretty_codes = (", ".join(codes) if codes else "—")
+    await message.answer(
+        "✅ Мероприятие обновлено!\n"
+        f"Текущее: {new_event}\n\n"
+        f"Лимит 1+1: {limit_qty}\n\n"
+        f"Цены:\n"
+        f"• 1+1: {prices['1+1']}\n"
+        f"• single: {prices['single']}\n"
+        f"• promocode: {prices['promocode']}\n\n"
+        f"Промокоды: {pretty_codes}"
+    )
+
+    # Если раньше было none → стало не none — шлём анонс (как раньше)
+    if broadcast_needed:
         await message.answer("📣 Сначала рассылаю последний пост канала, затем уведомление с кнопкой…")
-        asyncio.create_task(_broadcast_last_post_then_notice(message.bot, config.EVENT_CODE))
+        asyncio.create_task(_broadcast_last_post_then_notice(message.bot, new_event))
+
 # =========================
 # Счётчик желающих 1+1
 # =========================
