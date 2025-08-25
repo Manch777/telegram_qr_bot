@@ -49,35 +49,28 @@ async def admin_panel(message: Message):
     uid = message.from_user.id
 
     if is_full_admin(uid):
-
-        await message.bot.set_my_commands([
-            BotCommand(command="report", description="📊 Статистика"),
-            BotCommand(command="scanner", description="📷 Открыть сканер"),
-            BotCommand(command="change_event", description="🔁 Сменить мероприятие"),
-            BotCommand(command="broadcast_last", description="📣 Разослать последний пост"),  # <-- добавили
-            BotCommand(command="wishers", description="📝 Кто хотел 1+1"),
-            BotCommand(command="stats_this", description="📊 Cтатистика о количестве проданных билетов"),
-            BotCommand(command="scan_access_menu", description="🔐 Управление доступом к сканеру"),            
-            BotCommand(command="export_users", description="📤 Выгрузить базу (все)"),
-            BotCommand(command="export_users_this", description="📤 Выгрузить базу (текущее)"),
-            BotCommand(command="clear_db", description="Очистить базу"),
-            BotCommand(command="exit_admin", description="Вернуться в пользовательское меню"),
-        ], scope={"type": "chat", "chat_id": message.from_user.id})
-
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="📣 Разослать последний пост", callback_data="broadcast_last")]
-        ])
-        await message.answer("🛡 Режим администратора включён.")
+        # Группы команд для полноценных админов
+        await message.bot.set_my_commands(
+            [
+                BotCommand(command="analytics", description="📊 Аналитическая сводка мероприятия"),
+                BotCommand(command="event_tool_set", description="🛠 Управление мероприятием"),
+                BotCommand(command="admin_tool_set", description="🧰 Администрирование"),
+                BotCommand(command="exit_admin", description="↩️ Вернуться в пользовательское меню"),
+            ],
+            scope=BotCommandScopeChat(chat_id=uid),
+        )
+        await message.answer("🛡 Режим администратора включён. Выбери нужный набор команд в меню.")
         return
-    
+
     if await _can_use_scanner(uid):
-        # Только сканер
-        await message.bot.set_my_commands([
-            BotCommand(command="scanner", description="📷 Открыть сканер"),
-            BotCommand(command="exit_admin", description="Вернуться в пользовательское меню"),
-        ], scope={"type": "chat", "chat_id": uid})
-
-
+        # Только сканер-доступ
+        await message.bot.set_my_commands(
+            [
+                BotCommand(command="scanner", description="📷 Открыть сканер"),
+                BotCommand(command="exit_admin", description="↩️ Вернуться в пользовательское меню"),
+            ],
+            scope=BotCommandScopeChat(chat_id=uid),
+        )
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="📷 Открыть сканер", url=SCAN_WEBAPP_URL)]
         ])
@@ -86,6 +79,110 @@ async def admin_panel(message: Message):
 
     await message.answer("🚫 У вас нет доступа к панели администратора.")
 
+
+
+
+def _kb_analytics() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📊 Статистика", callback_data="an:report")],
+        [InlineKeyboardButton(text="📊 Проданные билеты (текущее)", callback_data="an:stats_this")],
+        [InlineKeyboardButton(text="📝 Кто хотел 1+1", callback_data="an:wishers")],
+        [InlineKeyboardButton(text="📤 Выгрузить (текущее)", callback_data="an:export_this")],
+        [InlineKeyboardButton(text="📤 Выгрузить (все)", callback_data="an:export_all")],
+    ])
+
+def _kb_event_tools() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔁 Сменить мероприятие", callback_data="change_event")],
+        [InlineKeyboardButton(text="📣 Разослать последний пост", callback_data="broadcast_last")],
+        [InlineKeyboardButton(text="📷 Открыть сканер", url=SCAN_WEBAPP_URL)],
+    ])
+
+def _kb_admin_tools() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔐 Управление доступом к сканеру", callback_data="scan_access_menu")],
+        [InlineKeyboardButton(text="🧹 Очистить базу", callback_data="adm:clear_db")],
+    ])
+
+
+@router.message(lambda m: m.text == "/analytics")
+async def admin_menu_analytics(message: Message):
+    if not is_full_admin(message.from_user.id):
+        await message.answer("🚫 Недостаточно прав.")
+        return
+    await message.answer("Выберите сводку:", reply_markup=_kb_analytics())
+
+@router.message(lambda m: m.text == "/event_tool_set")
+async def admin_menu_event_tools(message: Message):
+    if not is_full_admin(message.from_user.id):
+        await message.answer("🚫 Недостаточно прав.")
+        return
+    await message.answer("Инструменты мероприятия:", reply_markup=_kb_event_tools())
+
+@router.message(lambda m: m.text == "/admin_tool_set")
+async def admin_menu_admin_tools(message: Message):
+    if not is_full_admin(message.from_user.id):
+        await message.answer("🚫 Недостаточно прав.")
+        return
+    await message.answer("Администрирование:", reply_markup=_kb_admin_tools())
+
+@router.callback_query(F.data == "an:report")
+async def cb_an_report(callback: CallbackQuery):
+    await callback.answer()
+    await report(callback.message)
+
+@router.callback_query(F.data == "an:stats_this")
+async def cb_an_stats_this(callback: CallbackQuery):
+    await callback.answer()
+    await ticket_stats_this(callback.message)
+
+@router.callback_query(F.data == "an:wishers")
+async def cb_an_wishers(callback: CallbackQuery):
+    await callback.answer()
+    await list_1plus1_wishers(callback.message)
+
+@router.callback_query(F.data == "an:export_this")
+async def cb_an_export_this(callback: CallbackQuery):
+    await callback.answer("Готовлю выгрузку…", show_alert=False)
+    # мини-реализация экспорта "текущее мероприятие"
+    rows = await get_all_users_full(config.EVENT_CODE)
+    if not rows:
+        await callback.message.answer("Данных нет.")
+        return
+    wb = Workbook(); ws = wb.active; ws.title = "users"
+    ws.append(["id","user_id","username","event_code","ticket_type","paid","status","purchase_date"])
+    for r in rows:
+        ws.append([r["id"], r["user_id"], r["username"], r["event_code"], r["ticket_type"], r["paid"], r["status"], r["purchase_date"]])
+    buf = BytesIO(); wb.save(buf); buf.seek(0)
+    await callback.message.answer_document(
+        document=BufferedInputFile(buf.getvalue(), filename=f"users_{config.EVENT_CODE}.xlsx"),
+        caption=f"📄 Выгрузка базы users — {config.EVENT_CODE}"
+    )
+
+@router.callback_query(F.data == "an:export_all")
+async def cb_an_export_all(callback: CallbackQuery):
+    await callback.answer("Готовлю выгрузку…", show_alert=False)
+    rows = await get_all_users_full(None)
+    if not rows:
+        await callback.message.answer("Данных нет.")
+        return
+    wb = Workbook(); ws = wb.active; ws.title = "users"
+    ws.append(["id","user_id","username","event_code","ticket_type","paid","status","purchase_date"])
+    for r in rows:
+        ws.append([r["id"], r["user_id"], r["username"], r["event_code"], r["ticket_type"], r["paid"], r["status"], r["purchase_date"]])
+    buf = BytesIO(); wb.save(buf); buf.seek(0)
+    await callback.message.answer_document(
+        document=BufferedInputFile(buf.getvalue(), filename="users.xlsx"),
+        caption="📄 Выгрузка базы users (все мероприятия)"
+    )
+    
+@router.callback_query(F.data == "adm:clear_db")
+async def cb_adm_clear_db(callback: CallbackQuery, state: FSMContext):
+    if not is_full_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True)
+        return
+    await callback.answer()
+    await start_clear_db(callback.message, state)
 
 
 # =========================
