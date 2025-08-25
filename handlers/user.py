@@ -13,6 +13,7 @@ from database import (
     log_one_plus_one_attempt, add_subscriber,
     get_one_plus_one_limit, remaining_one_plus_one_for_event,
     set_meta, get_meta, set_ticket_type_by_id,
+    get_unique_one_plus_one_attempters_for_event,
 )
 
 router = Router()
@@ -135,6 +136,41 @@ async def _show_root(bot, chat_id: int):
 async def _show_ticket_menu(bot, chat_id: int):
     kb = await _ticket_menu_kb()
     return await _push_screen(bot, chat_id, "Выбери тип билета:", kb)
+
+async def _notify_wishers_1p1_available(bot, event_code: str):
+    """
+    Шлём уведомления тем, кто пытался купить 1+1, когда слоты были заняты.
+    Отправляем не больше, чем текущий остаток по 1+1.
+    """
+    remaining = await remaining_one_plus_one_for_event(event_code)
+    if not remaining or remaining <= 0:
+        return
+
+    rows = await get_unique_one_plus_one_attempters_for_event(event_code)
+    if not rows:
+        return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")],
+        [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="back:ticket")],
+    ])
+
+    sent = 0
+    for r in rows:
+        uid = int(r["user_id"])
+        try:
+            await bot.send_message(
+                uid,
+                f"✨ Освободились билеты 1+1 на «{event_code}». Успей забрать 👇",
+                reply_markup=kb
+            )
+            sent += 1
+        except Exception:
+            pass
+        if sent >= remaining:
+            break
+        await asyncio.sleep(0.05)  # мягкий rate limit
+
 
 # ————— Логика User —————
 
@@ -453,6 +489,11 @@ async def help_command(message: Message):
 async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int, timeout_sec: int = 300):
     await asyncio.sleep(timeout_sec)
 
+    # узнаем тип билета и событие (важно для 1+1)
+    row = await get_row(row_id)
+    ticket_type = (row["ticket_type"] or "").strip().lower() if row else ""
+    event_code = row["event_code"] if row else None
+    
     from database import get_paid_status_by_id
     status = await get_paid_status_by_id(row_id)
 
@@ -475,3 +516,7 @@ async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int,
             "⏰ Время оплаты истекло.\nВыберите тип билета заново:",
             kb
         )
+        
+        # если освободился слот 1+1 — предупредим желающих
+        if ticket_type == "1+1" and event_code:
+            await _notify_wishers_1p1_available(bot, event_code)

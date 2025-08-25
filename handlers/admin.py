@@ -621,6 +621,13 @@ async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id
             "⏰ Время оплаты истекло.\nВыберите тип билета заново:",
             reply_markup=kb
         )
+    # после set_paid_status_by_id(..., "не оплатил")
+    try:
+        row = await get_row(row_id)
+        if row and (row["ticket_type"] or "").strip().lower() == "1+1":
+            await _notify_wishers_1p1_available(bot, row["event_code"])
+    except Exception:
+        pass
 
 
 # =========================
