@@ -128,53 +128,39 @@ async def admin_menu_admin_tools(message: Message):
 
 @router.callback_query(F.data == "an:report")
 async def cb_an_report(callback: CallbackQuery):
+    if not is_full_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer()
-    await report(callback.message)
+    await _send_report_to(callback.bot, callback.from_user.id)
 
 @router.callback_query(F.data == "an:stats_this")
 async def cb_an_stats_this(callback: CallbackQuery):
+    if not is_full_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer()
-    await ticket_stats_this(callback.message)
+    await _send_stats_this_to(callback.bot, callback.from_user.id)
 
 @router.callback_query(F.data == "an:wishers")
 async def cb_an_wishers(callback: CallbackQuery):
+    if not is_full_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer()
-    await list_1plus1_wishers(callback.message)
+    await _send_wishers_to(callback.bot, callback.from_user.id)
 
 @router.callback_query(F.data == "an:export_this")
 async def cb_an_export_this(callback: CallbackQuery):
+    if not is_full_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer("Готовлю выгрузку…", show_alert=False)
-    # мини-реализация экспорта "текущее мероприятие"
-    rows = await get_all_users_full(config.EVENT_CODE)
-    if not rows:
-        await callback.message.answer("Данных нет.")
-        return
-    wb = Workbook(); ws = wb.active; ws.title = "users"
-    ws.append(["id","user_id","username","event_code","ticket_type","paid","status","purchase_date"])
-    for r in rows:
-        ws.append([r["id"], r["user_id"], r["username"], r["event_code"], r["ticket_type"], r["paid"], r["status"], r["purchase_date"]])
-    buf = BytesIO(); wb.save(buf); buf.seek(0)
-    await callback.message.answer_document(
-        document=BufferedInputFile(buf.getvalue(), filename=f"users_{config.EVENT_CODE}.xlsx"),
-        caption=f"📄 Выгрузка базы users — {config.EVENT_CODE}"
-    )
+    await _send_export_to(callback.bot, callback.from_user.id, only_this=True)
 
 @router.callback_query(F.data == "an:export_all")
 async def cb_an_export_all(callback: CallbackQuery):
+    if not is_full_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer("Готовлю выгрузку…", show_alert=False)
-    rows = await get_all_users_full(None)
-    if not rows:
-        await callback.message.answer("Данных нет.")
-        return
-    wb = Workbook(); ws = wb.active; ws.title = "users"
-    ws.append(["id","user_id","username","event_code","ticket_type","paid","status","purchase_date"])
-    for r in rows:
-        ws.append([r["id"], r["user_id"], r["username"], r["event_code"], r["ticket_type"], r["paid"], r["status"], r["purchase_date"]])
-    buf = BytesIO(); wb.save(buf); buf.seek(0)
-    await callback.message.answer_document(
-        document=BufferedInputFile(buf.getvalue(), filename="users.xlsx"),
-        caption="📄 Выгрузка базы users (все мероприятия)"
-    )
+    await _send_export_to(callback.bot, callback.from_user.id, only_this=False)
+
     
 @router.callback_query(F.data == "adm:clear_db")
 async def cb_adm_clear_db(callback: CallbackQuery, state: FSMContext):
@@ -257,72 +243,17 @@ async def report(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
-
-    total = await count_registered()
-    active = await count_activated()
-    inactive = total - active
-    chat_count = await message.bot.get_chat_member_count(CHANNEL_ID)
-    paid_count = await count_paid()
-
-    await message.answer(
-        f"📊 Статистика:\n"
-        f"👥 Подписчиков в канале: {chat_count}\n"
-        f"👤 Создано покупок: {total}\n"
-        f"💰 Оплачено: {paid_count}\n"
-        f"✅ Пришли: {active}\n"
-        f"❌ Не пришли: {inactive}"
-    )
+    await _send_report_to(message.bot, message.chat.id)
 
 # =========================
 # /export_users — выгрузить ВСЕ покупки в Excel
 # /export_users_this — выгрузить покупки ТЕКУЩЕГО мероприятия
 # =========================
-@router.message(lambda m: m.text in ("/export_users", "/export_users_this"))
 async def export_users_excel(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
-
-    only_this = (message.text == "/export_users_this")
-    rows = await get_all_users_full(config.EVENT_CODE if only_this else None)
-    if not rows:
-        await message.answer("Данных нет.")
-        return
-
-    # Готовим Excel
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "users"
-
-    # Шапка
-    headers = [
-        "id", "user_id", "username", "event_code",
-        "ticket_type", "paid", "status", "purchase_date"
-    ]
-    ws.append(headers)
-
-    # Данные
-    for r in rows:
-        ws.append([
-            r["id"],
-            r["user_id"],
-            r["username"],
-            r["event_code"],
-            r["ticket_type"],
-            r["paid"],
-            r["status"],
-            r["purchase_date"],  # это date из БД — openpyxl съест нормально
-        ])
-
-    buf = BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-
-    fname = "users.xlsx" if not only_this else f"users_{config.EVENT_CODE}.xlsx"
-    await message.answer_document(
-        document=BufferedInputFile(buf.getvalue(), filename=fname),
-        caption="📄 Выгрузка базы users"
-    )
+    await _send_export_to(message.bot, message.chat.id, only_this=(message.text == "/export_users_this"))
         
 # =========================
 # /stats — витрина продаж (только оплаченные)
@@ -335,21 +266,7 @@ async def ticket_stats_this(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
-
-    ev = config.EVENT_CODE
-    rows = await get_ticket_stats_for_event(ev, paid_statuses=("оплатил",))
-    if not rows:
-        await message.answer(f"Для «{ev}» оплаченных билетов нет.")
-        return
-
-    total = sum(int(r["count"]) for r in rows)
-    parts = [f"📊 «{ev}»: только оплаченные", ""]
-    for r in rows:
-        parts.append(f"• {r['ticket_type']}: {int(r['count'])}")
-    parts.append("")
-    parts.append(f"ИТОГО: {total}")
-
-    await message.answer("\n".join(parts))
+    await _send_stats_this_to(message.bot, message.chat.id)
 
 
 # =========================
@@ -766,32 +683,11 @@ async def change_event_promocodes(message: Message, state: FSMContext):
 # Счётчик желающих 1+1
 # =========================
 
-@router.message(lambda msg: msg.text == "/wishers")
 async def list_1plus1_wishers(message: Message):
     if message.from_user.id not in ADMIN_IDS:
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
-
-    rows = await get_unique_one_plus_one_attempters_for_event(config.EVENT_CODE)
-    if not rows:
-        await message.answer("Пока никто не пытался купить 1+1 после исчерпания лимита.")
-        return
-
-    lines = ["📝 Кто хотел 1+1, но не успел (уникальные пользователи):\n"]
-    for r in rows:
-        uid = r["user_id"]
-        uname = r["username"] or f"id:{uid}"
-        when = r["last_try"].strftime("%Y-%m-%d %H:%M")
-        lines.append(f"• @{uname} (id:{uid}) — {when}")
-
-    text = "\n".join(lines)
-    # если вдруг получится очень длинно — отправим файлом
-    if len(text) > 4000:
-        with open("wishers_1plus1.txt", "w", encoding="utf-8") as f:
-            f.write(text)
-        await message.answer_document(FSInputFile("wishers_1plus1.txt"), caption="📝 Список желающих 1+1")
-    else:
-        await message.answer(text)
+    await _send_wishers_to(message.bot, message.chat.id)
 
 
 # =========================
@@ -1305,3 +1201,67 @@ async def _load_event_promocodes(event_code: str) -> list[str] | None:
         return json.loads(raw)
     except Exception:
         return None
+
+
+async def _send_report_to(bot, chat_id: int):
+    total = await count_registered()
+    active = await count_activated()
+    inactive = total - active
+    chat_count = await bot.get_chat_member_count(CHANNEL_ID)
+    paid_count = await count_paid()
+    await bot.send_message(
+        chat_id,
+        f"📊 Статистика:\n"
+        f"👥 Подписчиков в канале: {chat_count}\n"
+        f"👤 Создано покупок: {total}\n"
+        f"💰 Оплачено: {paid_count}\n"
+        f"✅ Пришли: {active}\n"
+        f"❌ Не пришли: {inactive}"
+    )
+
+async def _send_stats_this_to(bot, chat_id: int):
+    ev = config.EVENT_CODE
+    rows = await get_ticket_stats_for_event(ev, paid_statuses=("оплатил",))
+    if not rows:
+        await bot.send_message(chat_id, f"Для «{ev}» оплаченных билетов нет.")
+        return
+    total = sum(int(r["count"]) for r in rows)
+    parts = [f"📊 «{ev}»: только оплаченные", ""]
+    for r in rows:
+        parts.append(f"• {r['ticket_type']}: {int(r['count'])}")
+    parts.append("")
+    parts.append(f"ИТОГО: {total}")
+    await bot.send_message(chat_id, "\n".join(parts))
+
+async def _send_wishers_to(bot, chat_id: int):
+    rows = await get_unique_one_plus_one_attempters_for_event(config.EVENT_CODE)
+    if not rows:
+        await bot.send_message(chat_id, "Пока никто не пытался купить 1+1 после исчерпания лимита.")
+        return
+    lines = ["📝 Кто хотел 1+1, но не успел (уникальные пользователи):\n"]
+    for r in rows:
+        uid = r["user_id"]
+        uname = r["username"] or f"id:{uid}"
+        when = r["last_try"].strftime("%Y-%m-%d %H:%M")
+        lines.append(f"• @{uname} (id:{uid}) — {when}")
+    text = "\n".join(lines)
+    if len(text) > 4000:
+        with open("wishers_1plus1.txt", "w", encoding="utf-8") as f:
+            f.write(text)
+        await bot.send_document(chat_id, FSInputFile("wishers_1plus1.txt"), caption="📝 Список желающих 1+1")
+    else:
+        await bot.send_message(chat_id, text)
+
+async def _send_export_to(bot, chat_id: int, only_this: bool):
+    rows = await get_all_users_full(config.EVENT_CODE if only_this else None)
+    if not rows:
+        await bot.send_message(chat_id, "Данных нет.")
+        return
+    wb = Workbook(); ws = wb.active; ws.title = "users"
+    ws.append(["id","user_id","username","event_code","ticket_type","paid","status","purchase_date"])
+    for r in rows:
+        ws.append([r["id"], r["user_id"], r["username"], r["event_code"], r["ticket_type"], r["paid"], r["status"], r["purchase_date"]])
+    buf = BytesIO(); wb.save(buf); buf.seek(0)
+    fname = f"users_{config.EVENT_CODE}.xlsx" if only_this else "users.xlsx"
+    await bot.send_document(chat_id, BufferedInputFile(buf.getvalue(), filename=fname),
+                            caption="📄 Выгрузка базы users" + (f" — {config.EVENT_CODE}" if only_this else " (все мероприятия)"))
