@@ -1204,11 +1204,6 @@ def _canon_type(t: str) -> str:
     return "promocode"
 
 async def _calc_revenue_for_event(event_code: str) -> tuple[int, int]:
-    """
-    Возвращает (total_revenue, missing_price_count) по одному событию.
-    Суммируем только записи с paid == 'оплатил'.
-    Цена берётся из bot_meta: prices:<event_code> (ключи: '1+1', 'single', 'promocode').
-    """
     if not event_code or event_code.strip().lower() == "none":
         return 0, 0
 
@@ -1218,10 +1213,11 @@ async def _calc_revenue_for_event(event_code: str) -> tuple[int, int]:
     missing = 0
 
     for r in rows or []:
-        paid = (r.get("paid") or "").strip().lower()
+        d = dict(r)  # ← ключевая правка
+        paid = (d.get("paid") or "").strip().lower()
         if paid != "оплатил":
             continue
-        tt = _canon_type(r.get("ticket_type"))
+        tt = _canon_type(d.get("ticket_type"))
         price = prices.get(tt)
         if isinstance(price, int):
             total += price
@@ -1229,29 +1225,27 @@ async def _calc_revenue_for_event(event_code: str) -> tuple[int, int]:
             missing += 1
     return total, missing
 
+
 async def _calc_revenue_all_events() -> tuple[int, int]:
-    """
-    Возвращает (total_revenue_all, missing_price_count_all) по всем событиям.
-    Для каждого события берём свои prices:<event_code>.
-    """
     rows = await get_all_users_full(None)
     total = 0
     missing = 0
     cache: dict[str, dict] = {}
 
     for r in rows or []:
-        paid = (r.get("paid") or "").strip().lower()
+        d = dict(r)  # ← ключевая правка
+        paid = (d.get("paid") or "").strip().lower()
         if paid != "оплатил":
             continue
 
-        ev = (r.get("event_code") or "").strip()
+        ev = (d.get("event_code") or "").strip()
         if not ev or ev.lower() == "none":
             continue
 
         if ev not in cache:
             cache[ev] = await _load_event_prices(ev) or {}
 
-        tt = _canon_type(r.get("ticket_type"))
+        tt = _canon_type(d.get("ticket_type"))
         price = cache[ev].get(tt)
         if isinstance(price, int):
             total += price
@@ -1259,6 +1253,7 @@ async def _calc_revenue_all_events() -> tuple[int, int]:
             missing += 1
 
     return total, missing
+
 
 @router.callback_query(F.data == "an:revenue")
 async def cb_an_revenue(callback: CallbackQuery):
