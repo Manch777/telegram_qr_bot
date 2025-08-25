@@ -555,7 +555,7 @@ async def change_event_set_limit(message: Message, state: FSMContext):
 
     await state.update_data(_limit_qty=qty)
     await state.set_state(ChangeEventStates.waiting_for_price_1p1)
-    await message.answer("💵 Введите цену для билета *1+1* (целое число):", parse_mode="Markdown
+    await message.answer("💵 Введите цену для билета *1+1* (целое число):", parse_mode="Markdown")
 
 @router.message(ChangeEventStates.waiting_for_price_1p1)
 async def change_event_price_1p1(message: Message, state: FSMContext):
