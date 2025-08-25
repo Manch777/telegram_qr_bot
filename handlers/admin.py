@@ -420,7 +420,9 @@ class ChangeEventStates(StatesGroup):
     waiting_for_password = State()
     waiting_for_event_name = State()
     waiting_for_1p1_limit = State()   # <— новое состояние
-
+    waiting_for_prices = State()        # <— новое
+    waiting_for_promocodes = State()    # <— новое
+    
 def _normalize_event_name(raw: str) -> str:
     # Прибираем лишние пробелы, убираем перевод строки по краям
     return " ".join((raw or "").strip().split())
@@ -543,23 +545,77 @@ async def change_event_set_limit(message: Message, state: FSMContext):
     used = await count_one_plus_one_taken(config.EVENT_CODE)
     left = max(qty - used, 0)
 
+    # ➜ сразу переходим к ценам
+    await state.set_state(ChangeEventStates.waiting_for_prices)
+    await message.answer(
+        "Укажи *цены* для типов билетов (руб.), формат по строкам или через запятую:\n"
+        "`1+1: 1500`\n`single: 1000`\n`promocode: 800`\n\n"
+        "_Любые отсутствующие типы можно не указывать._",
+        parse_mode="Markdown"
+    )
+
+
+@router.message(ChangeEventStates.waiting_for_prices)
+async def change_event_set_prices(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+    try:
+        prices = _parse_prices(message.text or "")
+    except ValueError as e:
+        await message.answer(f"⚠️ {e}\nПопробуйте снова (пример: `1+1:1500, single:1000, promocode:800`).",
+                             parse_mode="Markdown")
+        return
+
+    await _save_event_prices(config.EVENT_CODE, prices or {})
+    await state.set_state(ChangeEventStates.waiting_for_promocodes)
+    await message.answer(
+        "Теперь отправь *все доступные промокоды* через запятую.\n"
+        "Если промокодов нет — просто отправь `-`.",
+        parse_mode="Markdown"
+    )
+
+
+@router.message(ChangeEventStates.waiting_for_promocodes)
+async def change_event_set_promocodes(message: Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        await state.clear()
+        return
+
+    text = (message.text or "").strip()
+    codes = [] if text in ("-", "—", "") else _parse_promocodes(text)
+    await _save_event_promocodes(config.EVENT_CODE, codes)
+
+    # итоги
+    prices = await _load_event_prices(config.EVENT_CODE) or {}
+    limit = await get_one_plus_one_limit(config.EVENT_CODE)
+    used = await count_one_plus_one_taken(config.EVENT_CODE)
+    left = max((limit or 0) - (used or 0), 0)
+
+    await state.clear()
+    lines = [
+        "✅ Мероприятие обновлено!",
+        f"Текущее: {config.EVENT_CODE}",
+        f"Лимит 1+1: {limit}",
+        f"Уже занято: {used}",
+        f"Осталось: {left}",
+        "",
+        "💵 Цены:",
+        f"• 1+1: {prices.get('1+1', '—')}",
+        f"• single: {prices.get('single', '—')}",
+        f"• promocode: {prices.get('promocode', '—')}",
+        "",
+        f"🏷 Промокоды: {', '.join(codes) if codes else '—'}",
+    ]
+    await message.answer("\n".join(lines))
+
     data = await state.get_data()
     await state.clear()
-
-    await message.answer(
-        "✅ Мероприятие обновлено!\n"
-        f"Текущее: {config.EVENT_CODE}\n"
-        f"Лимит 1+1: {qty}\n"
-        f"Уже занято: {used}\n"
-        f"Осталось: {left}"
-    )
 
     # Если раньше было none → стало не none — запускаем рассылку сейчас
     if data.get("_broadcast_needed"):
         await message.answer("📣 Сначала рассылаю последний пост канала, затем уведомление с кнопкой…")
         asyncio.create_task(_broadcast_last_post_then_notice(message.bot, config.EVENT_CODE))
-
-
 # =========================
 # Счётчик желающих 1+1
 # =========================
@@ -1012,3 +1068,94 @@ async def _notify_wishers_1p1_available(bot, event_code: str):
             break
 
         await asyncio.sleep(0.05)  # мягкий rate-limit
+
+
+
+# ===============================================
+# ==== helpers: цены и промокоды для события ====
+# ===============================================
+
+def _norm_ticket_key(raw: str) -> str:
+    s = (raw or "").strip().lower()
+    # допускаем разные варианты написания
+    s = s.replace(" ", "")
+    if s in ("1+1", "1plus1", "oneplusone"):
+        return "1+1"
+    if s in ("single", "1", "один", "solo"):
+        return "single"
+    if s in ("promocode", "promo", "promocod", "промокод"):
+        return "promocode"
+    return s  # на случай будущих типов
+
+def _parse_prices(text: str) -> dict[str, int]:
+    """
+    Ожидаемый формат (по строкам; порядок свободный):
+      1+1: 1500
+      single: 1000
+      promocode: 800
+    Допускается через запятую: "1+1:1500, single:1000, promocode:800"
+    """
+    if not text:
+        return {}
+    prices = {}
+    parts = []
+    # поддержим и переносы строк, и записи через запятую
+    for line in text.replace(",", "\n").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        parts.append(line)
+    for p in parts:
+        if ":" not in p:
+            raise ValueError(f"Нет двоеточия: «{p}»")
+        k, v = p.split(":", 1)
+        k = _norm_ticket_key(k)
+        v = v.strip().replace(" ", "")
+        if not v.isdigit():
+            raise ValueError(f"Цена должна быть числом: «{p}»")
+        prices[k] = int(v)
+    # sanity-check — важные ключи можно подсветить, но не требуем жёстко
+    return prices
+
+def _parse_promocodes(text: str) -> list[str]:
+    """
+    "VIP, SUMMER2025, test_1" -> ["VIP", "SUMMER2025", "test_1"]
+    Пустая строка = нет промокодов.
+    """
+    if not (text or "").strip():
+        return []
+    arr = [c.strip() for c in text.split(",")]
+    # фильтруем пустые, убираем дубликаты, сохраняем порядок
+    seen = set()
+    out = []
+    for c in arr:
+        if not c:
+            continue
+        if c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+async def _save_event_prices(event_code: str, prices: dict[str, int]):
+    await set_meta(f"prices:{event_code}", json.dumps(prices, ensure_ascii=False))
+
+async def _load_event_prices(event_code: str) -> dict[str, int] | None:
+    raw = await get_meta(f"prices:{event_code}")
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
+
+async def _save_event_promocodes(event_code: str, codes: list[str]):
+    await set_meta(f"promocodes:{event_code}", json.dumps(codes, ensure_ascii=False))
+
+async def _load_event_promocodes(event_code: str) -> list[str] | None:
+    raw = await get_meta(f"promocodes:{event_code}")
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None

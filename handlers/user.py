@@ -399,7 +399,8 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
         f"Тип билета: {ticket_type}\n"
         f"Мероприятие: {config.EVENT_CODE}\n\n"
         "После оплаты нажми «Я оплатил».\n"
-        "❗️В комментариях платежа укажи свой Telegram-ник."
+        "⏳ Ссылка на оплату действует 5 минут!\n"
+        "❗️Обязательно укажи свой Telegram-ник в комментариях платежа."
     )
 
     bot = obj.bot
