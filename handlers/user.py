@@ -6,7 +6,7 @@ import json
 from aiogram.filters import CommandStart
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from config import CHANNEL_ID, PAYMENT_LINK, INSTAGRAM_LINK, PROMOCODES, ADMIN_IDS
+from config import CHANNEL_ID, PAYMENT_LINK, INSTAGRAM_LINK, ADMIN_IDS
 from database import (
     add_user,  get_row,
     get_paid_status_by_id, set_paid_status_by_id,
@@ -327,6 +327,45 @@ async def cancel_promocode(callback: CallbackQuery):
     else:
         await _show_ticket_menu(callback.bot, callback.from_user.id)
 
+
+async def _get_event_promocodes() -> set[str]:
+    """
+    Читает промокоды из bot_meta по ключу 'promocodes:<EVENT_CODE>',
+    который заполняет админ. Ожидается JSON-список строк.
+    Возвращает множество кодов в UPPERCASE.
+    Есть безопасный фолбэк на config.PROMOCODES, если меты нет.
+    """
+    codes: set[str] = set()
+
+    # основной источник — мета (заполненная админом)
+    raw = await get_meta(f"promocodes:{config.EVENT_CODE}")
+    lst = None
+    if raw:
+        try:
+            lst = json.loads(raw)
+        except Exception:
+            lst = None
+
+    if isinstance(lst, list):
+        for c in lst:
+            if isinstance(c, str) and c.strip():
+                codes.add(c.strip().upper())
+    elif isinstance(lst, str):
+        # на случай, если вдруг сохранили строкой "AAA, BBB"
+        parts = [p.strip() for p in lst.split(",")]
+        for c in parts:
+            if c:
+                codes.add(c.upper())
+
+    # фолбэк: если админ ещё не задал мету — берём старые коды из конфига (если есть)
+    try:
+        from config import PROMOCODES as CFG_CODES  # опционально
+        codes |= {str(c).strip().upper() for c in CFG_CODES if str(c).strip()}
+    except Exception:
+        pass
+
+    return codes
+
 # Ловим ввод промокода
 @router.message(F.text & ~F.text.startswith("/"))
 async def handle_promocode(message: Message):
@@ -342,15 +381,16 @@ async def handle_promocode(message: Message):
         )
         return
 
-    code = (message.text or "").strip().upper()
-    if code not in PROMOCODES:
-        # не трогаем экран — просто скажем, что неверно
+    user_code = (message.text or "").strip().upper()
+    valid_codes = await _get_event_promocodes()
+
+    if user_code not in valid_codes:
         await message.answer("❌ Неверный промокод. Попробуйте снова.")
         return
 
     _AWAIT_PROMO.discard(message.from_user.id)
-    # вместо "promocode" пишем сам код
-    await _present_payment(message, ticket_type=code, from_message=True)
+    # Передаём сам промокод как ticket_type (цена берётся по ключу 'promocode')
+    await _present_payment(message, ticket_type=user_code, from_message=True)
 
 
 async def _price_for_ticket(ticket_type: str) -> int | None:
@@ -429,7 +469,7 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
         f"Мероприятие: {config.EVENT_CODE}"
         f"{price_line}\n\n"
         "После оплаты нажми «Я оплатил».\n"
-        "⏳ Ссылка на оплату действует 5 минут!\n"
+        "⏳Ссылка на оплату действует 5 минут!\n"
         "❗️Обязательно укажи свой Telegram-ник в комментариях платежа."
     )
 
