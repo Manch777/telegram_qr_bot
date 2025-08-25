@@ -599,35 +599,41 @@ async def list_1plus1_wishers(message: Message):
 async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id: int, timeout_sec: int = 300):
     await asyncio.sleep(timeout_sec)
 
-    from database import get_paid_status_by_id
     status = await get_paid_status_by_id(row_id)
+    if status not in ("не оплатил", "отклонено"):
+        return
 
-    if status in ("не оплатил", "отклонено"):
-                # если было «отклонено», переводим в «не оплатил»
-        if status == "отклонено":
-            try:
-                await set_paid_status_by_id(row_id, "не оплатил")
-            except Exception:
-                pass
+    freed_one_plus_one = False
+    event_code = None
+
+    if status == "отклонено":
+        # переводим в «не оплатил» и проверяем, что это был 1+1
         try:
-            await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
+            await set_paid_status_by_id(row_id, "не оплатил")
+            row = await get_row(row_id)
+            if row:
+                event_code = row["event_code"]
+                freed_one_plus_one = (row.get("ticket_type") or "").strip().lower() == "1+1"
         except Exception:
             pass
 
-        kb = await _purchase_menu_kb()
-        
-        await bot.send_message(
-            chat_id,
-            "⏰ Время оплаты истекло.\nВыберите тип билета заново:",
-            reply_markup=kb
-        )
-    # после set_paid_status_by_id(..., "не оплатил")
+    # уберём кнопки у старого сообщения (если ещё можно)
     try:
-        row = await get_row(row_id)
-        if row and (row["ticket_type"] or "").strip().lower() == "1+1":
-            await _notify_wishers_1p1_available(bot, row["event_code"])
+        await bot.edit_message_reply_markup(chat_id=chat_id, message_id=message_id, reply_markup=None)
     except Exception:
         pass
+
+    # показать пользователю меню повторного выбора (с учётом лимита 1+1)
+    kb = await _purchase_menu_kb()
+    await bot.send_message(
+        chat_id,
+        "⏰ Время оплаты истекло.\nВыберите тип билета заново:",
+        reply_markup=kb
+    )
+
+    # если освободили 1+1 — уведомим желающих
+    if freed_one_plus_one and event_code:
+        await _notify_wishers_1p1_available(bot, event_code)
 
 
 # =========================
@@ -974,3 +980,38 @@ async def _purchase_menu_kb() -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="back:start")])
 
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+async def _notify_wishers_1p1_available(bot, event_code: str):
+    """
+    Шлём уведомления тем, кто пытался взять 1+1,
+    когда слоты были заняты. Не больше текущего остатка.
+    """
+    remaining = await remaining_one_plus_one_for_event(event_code)
+    if remaining is None or remaining <= 0:
+        return
+
+    rows = await get_unique_one_plus_one_attempters_for_event(event_code)
+    if not rows:
+        return
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
+    ])
+
+    sent = 0
+    for r in rows:
+        uid = int(r["user_id"])
+        try:
+            await bot.send_message(
+                uid,
+                f"✨ Освободились билеты 1+1 на «{event_code}». Успей забрать 👇",
+                reply_markup=kb
+            )
+            sent += 1
+        except Exception:
+            pass
+
+        if sent >= remaining:
+            break
+
+        await asyncio.sleep(0.05)  # мягкий rate-limit
