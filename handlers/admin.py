@@ -991,7 +991,8 @@ async def _notify_wishers_1p1_available(bot, event_code: str):
         return
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
+        [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="ticket_1plus1")],
+        [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="back:ticket")],
     ])
 
     sent = 0
