@@ -95,7 +95,7 @@ def _kb_analytics() -> InlineKeyboardMarkup:
 
 def _kb_event_tools() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔁 Сменить мероприятие", callback_data="change_event")],
+        [InlineKeyboardButton(text="🔁 Сменить мероприятие", callback_data="change_event_menu")],
         [InlineKeyboardButton(text="📣 Разослать последний пост", callback_data="broadcast_last")],
         [InlineKeyboardButton(text="📷 Открыть сканер", url=SCAN_WEBAPP_URL)],
     ])
@@ -109,21 +109,21 @@ def _kb_admin_tools() -> InlineKeyboardMarkup:
 
 @router.message(lambda m: m.text == "/analytics")
 async def admin_menu_analytics(message: Message):
-    if not is_full_admin(message.from_user.id):
+    if not await is_full_admin(message.from_user.id):
         await message.answer("🚫 Недостаточно прав.")
         return
     await message.answer("Выберите сводку:", reply_markup=_kb_analytics())
 
 @router.message(lambda m: m.text == "/event_tool_set")
 async def admin_menu_event_tools(message: Message):
-    if not is_full_admin(message.from_user.id):
+    if not await is_full_admin(message.from_user.id):
         await message.answer("🚫 Недостаточно прав.")
         return
     await message.answer("Инструменты мероприятия:", reply_markup=_kb_event_tools())
 
 @router.message(lambda m: m.text == "/admin_tool_set")
 async def admin_menu_admin_tools(message: Message):
-    if not is_full_admin(message.from_user.id):
+    if not await is_full_admin(message.from_user.id):
         await message.answer("🚫 Недостаточно прав.")
         return
     await message.answer("Администрирование:", reply_markup=_kb_admin_tools())
@@ -451,6 +451,17 @@ class ChangeEventStates(StatesGroup):
 def _normalize_event_name(raw: str) -> str:
     # Прибираем лишние пробелы, убираем перевод строки по краям
     return " ".join((raw or "").strip().split())
+
+
+@router.callback_query(F.data == "change_event_menu")
+async def change_event_menu_cb(callback: CallbackQuery):
+    if not await is_full_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True); return
+    await callback.message.answer(
+        f"Текущее мероприятие: {config.EVENT_CODE}",
+        reply_markup=_change_event_menu_kb()
+    )
+
 
 def _change_event_menu_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
