@@ -403,7 +403,7 @@ async def reject_payment(callback: CallbackQuery):
             chat_id=row["user_id"],
             message_id=sent.message_id,
             row_id=row_id,
-            timeout_sec=10  # 5 минут
+            timeout_sec=300  # 5 минут
         )
     )
     

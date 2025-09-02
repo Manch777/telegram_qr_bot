@@ -311,7 +311,7 @@ async def ask_promocode(callback: CallbackQuery):
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data="promo_cancel")],
     ])
-    await _push_screen(callback.bot, callback.from_user.id, "Введите ваш промокод одним сообщением:", kb)
+    await _push_screen(callback.bot, callback.from_user.id, "Введи промокод одним сообщением:", kb)
 
 # Отмена ожидания промокода
 @router.callback_query(F.data == "promo_cancel")
@@ -385,7 +385,7 @@ async def handle_promocode(message: Message):
     valid_codes = await _get_event_promocodes()
 
     if user_code not in valid_codes:
-        await message.answer("❌ Неверный промокод. Попробуйте снова.")
+        await message.answer("❌ Неверный промокод. Попробуй снова.")
         return
 
     _AWAIT_PROMO.discard(message.from_user.id)
@@ -483,7 +483,7 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
             chat_id=user_id,
             message_id=sent.message_id,
             row_id=row_id,
-            timeout_sec=10
+            timeout_sec=300
         )
     )
 
