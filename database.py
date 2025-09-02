@@ -37,6 +37,16 @@ one_plus_one_attempts = Table(
     Column("attempted_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
 )
 
+# --- Роли пользователей (админ/сканер/оплаты) ---
+roles = Table(
+    "roles",
+    metadata,
+    Column("user_id", BigInteger, nullable=False),
+    Column("role", String, nullable=False),
+    Column("granted_at", DateTime(timezone=True), server_default=func.now(), nullable=False),
+)
+
+
 # Получить лимит 1+1 для мероприятия (или None)
 async def get_one_plus_one_limit(event_code: str) -> int | None:
     row = await database.fetch_one(
@@ -401,3 +411,31 @@ async def get_all_users_full(event_code: Optional[str] = None):
     else:
         q = select(users).order_by(desc(users.c.id))
     return await database.fetch_all(q)
+
+
+# =========================
+# Роли/доступы
+# =========================
+async def has_role(user_id: int, role: str) -> bool:
+    q = select(roles.c.user_id).where(
+        roles.c.user_id == user_id,
+        roles.c.role == role
+    ).limit(1)
+    row = await database.fetch_one(q)
+    return row is not None
+
+async def add_role(user_id: int, role: str) -> None:
+    q = pg_insert(roles).values(user_id=user_id, role=role)\
+        .on_conflict_do_nothing(index_elements=[roles.c.user_id, roles.c.role])
+    await database.execute(q)
+
+async def remove_role(user_id: int, role: str) -> None:
+    await database.execute(
+        roles.delete().where(roles.c.user_id == user_id, roles.c.role == role)
+    )
+
+async def get_role_user_ids(role: str) -> list[int]:
+    rows = await database.fetch_all(
+        select(roles.c.user_id).where(roles.c.role == role)
+    )
+    return [int(r[0]) for r in rows]

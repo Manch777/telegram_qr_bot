@@ -6,7 +6,7 @@ import json
 from aiogram.filters import CommandStart
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from config import CHANNEL_ID, PAYMENT_LINK, INSTAGRAM_LINK, ADMIN_IDS
+from config import CHANNEL_ID, PAYMENT_LINK, INSTAGRAM_LINK
 from database import (
     add_user,  get_row,
     get_paid_status_by_id, set_paid_status_by_id,
@@ -14,7 +14,7 @@ from database import (
     log_one_plus_one_attempt, add_subscriber,
     get_one_plus_one_limit, remaining_one_plus_one_for_event,
     set_meta, get_meta, set_ticket_type_by_id,
-    get_unique_one_plus_one_attempters_for_event,
+    get_unique_one_plus_one_attempters_for_event, get_role_user_ids,
 )
 
 router = Router()
@@ -539,13 +539,18 @@ async def payment_confirmation(callback: CallbackQuery):
         [InlineKeyboardButton(text="✅ Подтвердить оплату", callback_data=f"approve_row:{row_id}")],
         [InlineKeyboardButton(text="❌ Не подтверждена",   callback_data=f"reject_row:{row_id}")]
     ])
-    recipient_id = getattr(config, "PAYMENTS_ADMIN_ID", None) or (ADMIN_IDS[0] if ADMIN_IDS else None)
+    recipients = await get_role_user_ids("payments_admin")
+    if not recipients:
+        recipients = await get_role_user_ids("admin")  # фолбэк — первые попавшиеся админы
+    recipient_id = recipients[0] if recipients else None
+
     if recipient_id:
         await callback.bot.send_message(
             chat_id=recipient_id,
             text=f"💰 Подтверждение оплаты пользователя @{username}\nТип билета: {ticket_type}",
             reply_markup=kb_admin
         )
+
 
 # /help
 @router.message(lambda m: m.text == "/help")

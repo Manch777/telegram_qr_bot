@@ -2,7 +2,7 @@ from aiogram import Router, F
 import config
 import json
 import asyncio
-from config import PAYMENTS_ADMIN_ID, SCANNER_ADMIN_IDS, INSTAGRAM_LINK, ADMIN_BROADCAST_PASSWORD
+from config import INSTAGRAM_LINK, ADMIN_BROADCAST_PASSWORD
 import re
 from openpyxl import Workbook
 from io import BytesIO
@@ -29,17 +29,18 @@ from database import (
     get_ticket_stats_grouped, get_ticket_stats_for_event,
     get_all_users_full, get_all_subscribers,
 )
-from config import SCAN_WEBAPP_URL, ADMIN_IDS, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
+from config import SCAN_WEBAPP_URL, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
 router = Router()
 
 
-def is_full_admin(uid: int) -> bool:
-    return uid in ADMIN_IDS
+async def is_full_admin(uid: int) -> bool:
+    return await has_role(uid, "admin")
 
-def is_scanner_admin(uid: int) -> bool:
+async def _can_use_scanner(uid: int) -> bool:
     # сканер-доступ у сканер-админов и у полноценных админов
-    return uid in SCANNER_ADMIN_IDS or uid in ADMIN_IDS
+    return await has_role(uid, "admin") or await has_role(uid, "scanner")
+
 
 # =========================
 # /admin — панель
@@ -48,7 +49,7 @@ def is_scanner_admin(uid: int) -> bool:
 async def admin_panel(message: Message):
     uid = message.from_user.id
 
-    if is_full_admin(uid):
+    if await is_full_admin(uid):
         # Группы команд для полноценных админов
         await message.bot.set_my_commands(
             [
@@ -62,7 +63,7 @@ async def admin_panel(message: Message):
         await message.answer("🛡 Режим администратора включён. Выбери нужный набор команд в меню.")
         return
 
-    if await _can_use_scanner(uid):
+    elif await _can_use_scanner(uid):
         # Только сканер-доступ
         await message.bot.set_my_commands(
             [
@@ -129,35 +130,35 @@ async def admin_menu_admin_tools(message: Message):
 
 @router.callback_query(F.data == "an:report")
 async def cb_an_report(callback: CallbackQuery):
-    if not is_full_admin(callback.from_user.id):
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer()
     await _send_report_to(callback.bot, callback.from_user.id)
 
 @router.callback_query(F.data == "an:stats_this")
 async def cb_an_stats_this(callback: CallbackQuery):
-    if not is_full_admin(callback.from_user.id):
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer()
     await _send_stats_this_to(callback.bot, callback.from_user.id)
 
 @router.callback_query(F.data == "an:wishers")
 async def cb_an_wishers(callback: CallbackQuery):
-    if not is_full_admin(callback.from_user.id):
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer()
     await _send_wishers_to(callback.bot, callback.from_user.id)
 
 @router.callback_query(F.data == "an:export_this")
 async def cb_an_export_this(callback: CallbackQuery):
-    if not is_full_admin(callback.from_user.id):
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer("Готовлю выгрузку…", show_alert=False)
     await _send_export_to(callback.bot, callback.from_user.id, only_this=True)
 
 @router.callback_query(F.data == "an:export_all")
 async def cb_an_export_all(callback: CallbackQuery):
-    if not is_full_admin(callback.from_user.id):
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True); return
     await callback.answer("Готовлю выгрузку…", show_alert=False)
     await _send_export_to(callback.bot, callback.from_user.id, only_this=False)
@@ -165,7 +166,7 @@ async def cb_an_export_all(callback: CallbackQuery):
     
 @router.callback_query(F.data == "adm:clear_db")
 async def cb_adm_clear_db(callback: CallbackQuery, state: FSMContext):
-    if not is_full_admin(callback.from_user.id):
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await callback.answer()
@@ -241,7 +242,7 @@ async def handle_webapp_data(message: Message):
 # =========================
 @router.message(lambda msg: msg.text == "/report")
 async def report(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
     await _send_report_to(message.bot, message.chat.id)
@@ -251,7 +252,7 @@ async def report(message: Message):
 # /export_users_this — выгрузить покупки ТЕКУЩЕГО мероприятия
 # =========================
 async def export_users_excel(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
     await _send_export_to(message.bot, message.chat.id, only_this=(message.text == "/export_users_this"))
@@ -264,7 +265,7 @@ async def export_users_excel(message: Message):
 # По текущему мероприятию из config.EVENT_CODE
 @router.message(lambda m: m.text == "/stats_this")
 async def ticket_stats_this(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
     await _send_stats_this_to(message.bot, message.chat.id)
@@ -290,7 +291,7 @@ async def exit_admin_mode(message: Message):
     ]
 
     # «Админ»-кнопку даём только супер-админу или сканер-админу
-    if is_full_admin(uid) or await _can_use_scanner(uid):
+    if await is_full_admin(uid) or await _can_use_scanner(uid):
         cmds.append(BotCommand(command="admin", description="🛡 Режим администратора"))
 
     await message.bot.set_my_commands(cmds, scope=BotCommandScopeChat(chat_id=uid))
@@ -417,7 +418,7 @@ class ClearDBStates(StatesGroup):
 
 @router.message(lambda msg: msg.text == "/clear_db")
 async def start_clear_db(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
 
@@ -459,7 +460,7 @@ def _change_event_menu_kb() -> InlineKeyboardMarkup:
 
 @router.message(lambda msg: msg.text == "/change_event")
 async def change_event_command(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await message.answer("🚫 У вас нет доступа к панели администратора.")
         return
 
@@ -471,7 +472,7 @@ async def change_event_command(message: Message):
 
 @router.callback_query(F.data == "change_event")
 async def change_event_start(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await state.update_data(_mode="change")  # режим: смена на новое название
@@ -480,7 +481,7 @@ async def change_event_start(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "event_off")
 async def event_off_start(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await state.update_data(_mode="off")  # режим: выключить продажи (EVENT_CODE="none")
@@ -490,7 +491,7 @@ async def event_off_start(callback: CallbackQuery, state: FSMContext):
 
 @router.message(ChangeEventStates.waiting_for_password)
 async def change_event_check_password(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await state.clear()
         return
     if (message.text or "").strip() != ADMIN_EVENT_PASSWORD:
@@ -519,7 +520,7 @@ async def change_event_check_password(message: Message, state: FSMContext):
 
 @router.message(ChangeEventStates.waiting_for_event_name)
 async def change_event_set_name(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await state.clear()
         return
 
@@ -551,7 +552,7 @@ async def change_event_set_name(message: Message, state: FSMContext):
 
 @router.message(ChangeEventStates.waiting_for_1p1_limit)
 async def change_event_set_limit(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await state.clear()
         return
 
@@ -685,7 +686,7 @@ async def change_event_promocodes(message: Message, state: FSMContext):
 # =========================
 
 async def list_1plus1_wishers(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await message.answer("🚫 У вас нет прав для этой команды.")
         return
     await _send_wishers_to(message.bot, message.chat.id)
@@ -815,7 +816,7 @@ class BroadcastLastStates(StatesGroup):
 
 @router.message(BroadcastLastStates.waiting_for_password)
 async def broadcast_last_check_password(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await state.clear()
         return
 
@@ -877,14 +878,14 @@ async def _broadcast_last_post(bot, reply_target):
 
 @router.message(lambda m: m.text == "/broadcast_last")
 async def broadcast_last_cmd(message: Message, state: FSMContext):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         return
     await state.set_state(BroadcastLastStates.waiting_for_password)
     await message.answer("🔒 Введите пароль для рассылки последнего поста канала:")
 
 @router.callback_query(F.data == "broadcast_last")
 async def broadcast_last_cb(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await state.set_state(BroadcastLastStates.waiting_for_password)
@@ -919,11 +920,6 @@ async def _load_scanner_ids() -> set[int]:
 async def _save_scanner_ids(ids: set[int]) -> None:
     await set_meta(_SCANNER_META_KEY, json.dumps(sorted(list(ids))))
 
-async def _can_use_scanner(user_id: int) -> bool:
-    if user_id in config.ADMIN_IDS:
-        return True
-    ids = await _load_scanner_ids()
-    return user_id in ids
 
 class ScanAccessStates(StatesGroup):
     waiting_for_add_id = State()
@@ -941,17 +937,16 @@ def _scan_menu_kb() -> InlineKeyboardMarkup:
 
 @router.callback_query(F.data == "scan_access_menu")
 async def scan_access_menu(callback: CallbackQuery):
-    if callback.from_user.id not in config.ADMIN_IDS:
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await callback.message.answer("🔐 Управление доступом к сканеру:", reply_markup=_scan_menu_kb())
 
 @router.callback_query(F.data == "scan_access_view")
 async def scan_access_view(callback: CallbackQuery):
-    if callback.from_user.id not in config.ADMIN_IDS:
-        await callback.answer("Нет прав.", show_alert=True)
-        return
-    ids = await _load_scanner_ids()
+    if not await is_full_admin(callback.from_user.id):
+        await callback.answer("Нет прав.", show_alert=True); return
+    ids = await get_role_user_ids("scanner")
     if not ids:
         text = "Сканер-админов нет."
     else:
@@ -961,9 +956,10 @@ async def scan_access_view(callback: CallbackQuery):
         text = "\n".join(lines)
     await callback.message.answer(text, reply_markup=_scan_menu_kb())
 
+
 @router.callback_query(F.data == "scan_access_cancel")
 async def scan_access_cancel(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in config.ADMIN_IDS:
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await state.clear()
@@ -973,7 +969,7 @@ async def scan_access_cancel(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "scan_access_add")
 async def scan_access_add(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in config.ADMIN_IDS:
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await state.set_state(ScanAccessStates.waiting_for_add_id)
@@ -985,22 +981,18 @@ async def scan_access_add(callback: CallbackQuery, state: FSMContext):
 
 @router.message(ScanAccessStates.waiting_for_add_id)
 async def scan_access_add_id(message: Message, state: FSMContext):
-    if message.from_user.id not in config.ADMIN_IDS:
-        await state.clear()
-        return
+    if not await is_full_admin(message.from_user.id):
+        await state.clear(); return
     try:
         uid = int((message.text or "").strip())
     except ValueError:
         await message.answer("user_id должен быть числом. Попробуйте снова или нажмите «Отмена».",
-                             reply_markup=_scan_cancel_kb())
-        return
+                             reply_markup=_scan_cancel_kb()); return
 
-    ids = await _load_scanner_ids()
-    if uid in config.ADMIN_IDS or uid in ids:
+    if await has_role(uid, "admin") or await has_role(uid, "scanner"):
         await message.answer("✅ У пользователя уже есть доступ к сканеру.")
     else:
-        ids.add(uid)
-        await _save_scanner_ids(ids)
+        await add_role(uid, "scanner")
         await message.answer(f"✅ Выдан доступ к сканеру: {uid}")
 
     await state.clear()
@@ -1008,7 +1000,7 @@ async def scan_access_add_id(message: Message, state: FSMContext):
 
 @router.callback_query(F.data == "scan_access_remove")
 async def scan_access_remove(callback: CallbackQuery, state: FSMContext):
-    if callback.from_user.id not in config.ADMIN_IDS:
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await state.set_state(ScanAccessStates.waiting_for_remove_id)
@@ -1020,40 +1012,35 @@ async def scan_access_remove(callback: CallbackQuery, state: FSMContext):
 
 @router.message(ScanAccessStates.waiting_for_remove_id)
 async def scan_access_remove_id(message: Message, state: FSMContext):
-    if message.from_user.id not in config.ADMIN_IDS:
-        await state.clear()
-        return
+    if not await is_full_admin(message.from_user.id):
+        await state.clear(); return
     try:
         uid = int((message.text or "").strip())
     except ValueError:
         await message.answer("user_id должен быть числом. Попробуйте снова или нажмите «Отмена».",
-                             reply_markup=_scan_cancel_kb())
-        return
+                             reply_markup=_scan_cancel_kb()); return
 
-    if uid in config.ADMIN_IDS:
-        await message.answer("🚫 Нельзя отозвать доступ у супер-админа (ADMIN_IDS).")
+    if await has_role(uid, "admin"):
+        await message.answer("🚫 Нельзя отозвать доступ у полного админа (роль 'admin').")
+    elif not await has_role(uid, "scanner"):
+        await message.answer("ℹ️ У пользователя и так нет прав сканера.")
     else:
-        ids = await _load_scanner_ids()
-        if uid not in ids:
-            await message.answer("ℹ️ У пользователя и так нет прав сканера.")
-        else:
-            ids.remove(uid)
-            await _save_scanner_ids(ids)
-            await message.answer(f"✅ Доступ к сканеру отозван: {uid}")
+        await remove_role(uid, "scanner")
+        await message.answer(f"✅ Доступ к сканеру отозван: {uid}")
 
     await state.clear()
     await message.answer("Готово. Вернуться в меню управления:", reply_markup=_scan_menu_kb())
 
 @router.callback_query(F.data == "scan_access_close")
 async def scan_access_close(callback: CallbackQuery):
-    if callback.from_user.id not in config.ADMIN_IDS:
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await callback.message.answer("Закрыто.")
 
 @router.message(lambda m: m.text == "/scan_access_menu")
 async def scan_access_menu_cmd(message: Message):
-    if message.from_user.id not in ADMIN_IDS:
+    if not await is_full_admin(message.from_user.id):
         await message.answer("Нет прав.")
         return
     await message.answer("🔐 Управление доступом к сканеру:", reply_markup=_scan_menu_kb())
@@ -1257,7 +1244,7 @@ async def _calc_revenue_all_events() -> tuple[int, int]:
 
 @router.callback_query(F.data == "an:revenue")
 async def cb_an_revenue(callback: CallbackQuery):
-    if not is_full_admin(callback.from_user.id):
+    if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
     await callback.answer("Считаю…", show_alert=False)
