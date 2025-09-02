@@ -27,7 +27,7 @@ from database import (
     set_one_plus_one_limit, get_one_plus_one_limit,
     count_one_plus_one_taken, remaining_one_plus_one_for_event,
     get_ticket_stats_grouped, get_ticket_stats_for_event,
-    get_all_users_full, get_all_subscribers,
+    get_all_users_full, get_all_subscribers, has_role, add_role, remove_role, get_role_user_ids,
 )
 from config import SCAN_WEBAPP_URL, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
