@@ -3,9 +3,9 @@ from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import BotCommand, Message
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
-
+from aiogram.exceptions import TelegramNetworkError, TelegramBadRequest
 from config import BOT_TOKEN, WEBHOOK_URL
-from database import connect_db, disconnect_db, get_status, update_status, get_status_by_id, update_status_by_id, get_row
+from database import connect_db, disconnect_db, get_status, update_status, get_status_by_id, update_status_by_id, get_row, get_ticket_type
 from handlers import user, admin
 
 WEBHOOK_PATH = "/webhook"
@@ -78,10 +78,35 @@ dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.te
 
 async def on_startup(app: web.Application):
     await connect_db()
-    await bot.set_webhook(
-        FULL_WEBHOOK_URL,
-        allowed_updates=["message", "callback_query", "channel_post"]
-    )
+
+    try:
+        info = await bot.get_webhook_info(request_timeout=20)
+        need_set = (info.url or "") != FULL_WEBHOOK_URL
+    except TelegramNetworkError as e:
+        # не получилось узнать — попробуем один раз поставить вебхук
+        print(f"[WARN] get_webhook_info timeout: {e}. Will try set_webhook anyway.")
+        need_set = True
+
+    if need_set:
+        for attempt in range(3):
+            try:
+                await bot.set_webhook(
+                    FULL_WEBHOOK_URL,
+                    allowed_updates=["message", "callback_query", "channel_post"],
+                    request_timeout=60,   # ↑ больше таймаут
+                )
+                print("✅ Webhook set")
+                break
+            except TelegramNetworkError as e:
+                print(f"[WARN] set_webhook timeout (try {attempt+1}/3): {e}")
+                if attempt == 2:
+                    print("[WARN] Continue startup without resetting webhook.")
+            except TelegramBadRequest as e:
+                # Обычно сюда попадают ошибки в URL (должен быть https, без лишних пробелов и т.п.)
+                print(f"[ERROR] set_webhook bad request: {e}")
+                # На таких ошибках действительно лучше не продолжать — они не «временные».
+                raise
+
     await bot.set_my_commands([
         BotCommand(command="start", description="Начать"),
         BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
@@ -90,7 +115,10 @@ async def on_startup(app: web.Application):
 
 
 async def on_shutdown(app: web.Application):
-    await bot.delete_webhook()
+    try:
+        await bot.delete_webhook(request_timeout=20)
+    except TelegramNetworkError as e:
+        print(f"[WARN] delete_webhook timeout: {e}")
     await disconnect_db()
 
 
