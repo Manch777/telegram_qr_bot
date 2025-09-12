@@ -76,70 +76,60 @@ dp.include_router(user.router)
 dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.text.len() > 7)
 
 
-async def on_startup(app: web.Application):
-    await connect_db()
-
+async def _set_webhook_background():
+    """Не блокируем запуск HTTP-сервера — пробуем выставить вебхук фоном."""
     try:
-        info = await bot.get_webhook_info(request_timeout=20)
-        need_set = (info.url or "") != FULL_WEBHOOK_URL
-    except TelegramNetworkError as e:
-        # не получилось узнать — попробуем один раз поставить вебхук
-        print(f"[WARN] get_webhook_info timeout: {e}. Will try set_webhook anyway.")
-        need_set = True
+        info = await bot.get_webhook_info(request_timeout=10)
+        if (info.url or "") != FULL_WEBHOOK_URL:
+            await bot.set_webhook(
+                FULL_WEBHOOK_URL,
+                allowed_updates=["message", "callback_query", "channel_post"],
+                request_timeout=10,
+            )
+            print("✅ Webhook set")
+        else:
+            print("ℹ️ Webhook already set")
+    except (TelegramNetworkError, TelegramBadRequest) as e:
+        # Не критично для старта сервера — просто логируем.
+        print(f"[WARN] set_webhook skipped: {e}")
 
-    if need_set:
-        for attempt in range(3):
-            try:
-                await bot.set_webhook(
-                    FULL_WEBHOOK_URL,
-                    allowed_updates=["message", "callback_query", "channel_post"],
-                    request_timeout=60,   # ↑ больше таймаут
-                )
-                print("✅ Webhook set")
-                break
-            except TelegramNetworkError as e:
-                print(f"[WARN] set_webhook timeout (try {attempt+1}/3): {e}")
-                if attempt == 2:
-                    print("[WARN] Continue startup without resetting webhook.")
-            except TelegramBadRequest as e:
-                # Обычно сюда попадают ошибки в URL (должен быть https, без лишних пробелов и т.п.)
-                print(f"[ERROR] set_webhook bad request: {e}")
-                # На таких ошибках действительно лучше не продолжать — они не «временные».
-                raise
+async def on_startup(app: web.Application):
+    # Если подлючение к БД может быть долгим — тоже можно вынести в фон:
+    await connect_db()
+    # Команды можно выставить быстро
+    try:
+        await bot.set_my_commands([
+            BotCommand(command="start", description="Начать"),
+            BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
+        ])
+    except Exception as e:
+        print(f"[WARN] set_my_commands: {e}")
 
-    await bot.set_my_commands([
-        BotCommand(command="start", description="Начать"),
-        BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
-    ])
-    print("✅ Бот запущен (webhook)")
-
+    # Критично: не ждём Telegram — запускаем фоном
+    asyncio.create_task(_set_webhook_background())
+    print("✅ Startup finished (server will bind now)")
 
 async def on_shutdown(app: web.Application):
+    # Не мешаем корректному завершению из-за Telegram-вызовов
     try:
-        await bot.delete_webhook(request_timeout=20)
+        await bot.delete_webhook(request_timeout=5)
     except TelegramNetworkError as e:
         print(f"[WARN] delete_webhook timeout: {e}")
     await disconnect_db()
 
-
-
 async def healthcheck(request):
     return web.Response(text="OK")
-
 
 def create_app():
     app = web.Application()
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
-
-    # Обработка webhook-запросов
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
-
-    # Для Render Healthcheck
     app.router.add_get("/healthcheck", healthcheck)
     return app
 
-
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "10000"))
+    print(f"🔊 Binding HTTP server on 0.0.0.0:{port}", flush=True)
     app = create_app()
-    web.run_app(app, host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    web.run_app(app, host="0.0.0.0", port=port)
