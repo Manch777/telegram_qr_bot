@@ -10,7 +10,7 @@ from database import connect_db, disconnect_db, get_status, update_status, get_s
 from handlers import user, admin
 from aiogram.exceptions import TelegramNetworkError, TelegramBadRequest
 WEBHOOK_PATH = "/webhook"
-FULL_WEBHOOK_URL = WEBHOOK_URL + WEBHOOK_PATH
+FULL_WEBHOOK_URL = (WEBHOOK_URL or "").rstrip("/") + WEBHOOK_PATH
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
