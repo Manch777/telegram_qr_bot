@@ -7,7 +7,7 @@ from aiogram.exceptions import TelegramNetworkError, TelegramBadRequest
 from config import BOT_TOKEN, WEBHOOK_URL
 from database import connect_db, disconnect_db, get_status, update_status, get_status_by_id, update_status_by_id, get_row, get_ticket_type
 from handlers import user, admin
-
+from aiogram.exceptions import TelegramNetworkError, TelegramBadRequest
 WEBHOOK_PATH = "/webhook"
 FULL_WEBHOOK_URL = WEBHOOK_URL + WEBHOOK_PATH
 
@@ -120,6 +120,7 @@ async def on_shutdown(app: web.Application):
     except TelegramNetworkError as e:
         print(f"[WARN] delete_webhook timeout: {e}")
     await disconnect_db()
+
 
 
 async def healthcheck(request):
