@@ -1,5 +1,5 @@
 import os
-from aiohttp import web
+from aiohttp import web, ClientSession
 import asyncio
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import BotCommand, Message
@@ -192,6 +192,18 @@ async def diag(request):
         return web.json_response({"error": str(e)}, status=500)
     return web.json_response(data)
 
+async def set_webhook_raw(request):
+    # Диагностический прямой вызов Telegram API (как ваша ручная ссылка)
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
+    params = {"url": FULL_WEBHOOK_URL}
+    try:
+        async with ClientSession() as s:
+            async with s.get(url, params=params, timeout=15) as resp:
+                payload = await resp.text()
+                return web.Response(text=payload, content_type="application/json")
+    except Exception as e:
+        return web.json_response({"error": str(e)}, status=500)
+
 def create_app():
     app = web.Application(middlewares=[request_logger])
     app.on_startup.append(on_startup)
@@ -200,6 +212,7 @@ def create_app():
     app.router.add_get("/healthcheck", healthcheck)
     app.router.add_get("/", root)
     app.router.add_get("/set-webhook", set_webhook_now)
+    app.router.add_get("/set-webhook-raw", set_webhook_raw)
     app.router.add_get("/diag", diag)
     return app
 
