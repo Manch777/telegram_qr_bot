@@ -574,7 +574,7 @@ async def _expire_payment_after(bot, chat_id: int, message_id: int, row_id: int,
     from database import get_paid_status_by_id
     status = await get_paid_status_by_id(row_id)
 
-    if status == "в процессе оплаты":
+    if status in ("в процессе оплаты"):
         # откатываем всё, что не "не оплатил", в "не оплатил"
         if status != "не оплатил":
             try:

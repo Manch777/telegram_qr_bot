@@ -9,7 +9,7 @@ from aiogram.types.error_event import ErrorEvent
 from config import BOT_TOKEN, WEBHOOK_URL
 from database import connect_db, disconnect_db, get_status, update_status, get_status_by_id, update_status_by_id, get_row, get_ticket_type
 from handlers import user, admin
-from aiogram.exceptions import TelegramNetworkError, TelegramBadRequest
+# duplicate import removed
 WEBHOOK_PATH = "/webhook"
 FULL_WEBHOOK_URL = (WEBHOOK_URL or "").rstrip("/") + WEBHOOK_PATH
 
