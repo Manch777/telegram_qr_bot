@@ -9,3 +9,5 @@ services:
         value: YOUR_TOKEN
       - key: POSTGRES_URL
         value: YOUR_DB
+      - key: WEBHOOK_URL
+        value: https://telegram-qr-bot-6hs0.onrender.com

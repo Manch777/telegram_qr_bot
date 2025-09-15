@@ -81,26 +81,32 @@ async def _set_webhook_background():
     """Устанавливаем вебхук с несколькими ретраями в фоне."""
     max_attempts = 5
     delay_seconds = 2
+    if not WEBHOOK_URL:
+        print("[ERROR] WEBHOOK_URL is empty; cannot set webhook. Set ENV WEBHOOK_URL to public https base (e.g. https://<service>.onrender.com)")
+        return
+    print(f"[INIT] Target webhook URL: {FULL_WEBHOOK_URL}")
     for attempt in range(1, max_attempts + 1):
         try:
             info = await bot.get_webhook_info(request_timeout=10)
+            print(f"[DEBUG] Telegram current webhook: '{info.url or ''}' (pending updates: {getattr(info, 'pending_update_count', 'n/a')})")
             if (info.url or "") != FULL_WEBHOOK_URL:
                 await bot.set_webhook(
                     FULL_WEBHOOK_URL,
                     allowed_updates=["message", "callback_query", "channel_post"],
+                    drop_pending_updates=False,
                     request_timeout=10,
                 )
-                print("✅ Webhook set")
+                print("✅ Webhook set", flush=True)
             else:
-                print("ℹ️ Webhook already set")
+                print("ℹ️ Webhook already set", flush=True)
             return
         except (TelegramNetworkError, TelegramBadRequest) as e:
-            print(f"[WARN] set_webhook attempt {attempt}/{max_attempts} failed: {e}")
+            print(f"[WARN] set_webhook attempt {attempt}/{max_attempts} failed: {e}", flush=True)
             if attempt < max_attempts:
                 await asyncio.sleep(delay_seconds)
                 delay_seconds = min(delay_seconds * 2, 30)
             else:
-                print("[ERROR] Unable to set webhook after retries")
+                print("[ERROR] Unable to set webhook after retries", flush=True)
 
 async def on_startup(app: web.Application):
     # Если подлючение к БД может быть долгим — тоже можно вынести в фон:
@@ -115,8 +121,9 @@ async def on_startup(app: web.Application):
         print(f"[WARN] set_my_commands: {e}")
 
     # Критично: не ждём Telegram — запускаем фоном
+    print(f"[INIT] WEBHOOK_URL base: '{WEBHOOK_URL}' | FULL: '{FULL_WEBHOOK_URL}'", flush=True)
     asyncio.create_task(_set_webhook_background())
-    print("✅ Startup finished (server will bind now)")
+    print("✅ Startup finished (server will bind now)", flush=True)
 
 async def on_shutdown(app: web.Application):
     # Не мешаем корректному завершению из-за Telegram-вызовов
@@ -129,12 +136,22 @@ async def on_shutdown(app: web.Application):
 async def healthcheck(request):
     return web.Response(text="OK")
 
+async def root(request):
+    return web.Response(text="Bot is up. See /healthcheck")
+
+async def set_webhook_now(request):
+    # ручной триггер установки вебхука
+    asyncio.create_task(_set_webhook_background())
+    return web.Response(text="Webhook setup triggered")
+
 def create_app():
     app = web.Application()
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
     app.router.add_get("/healthcheck", healthcheck)
+    app.router.add_get("/", root)
+    app.router.add_get("/set-webhook", set_webhook_now)
     return app
 
 if __name__ == "__main__":
