@@ -428,8 +428,8 @@ async def start_clear_db(message: Message, state: FSMContext):
 
 @router.message(ClearDBStates.waiting_for_password)
 async def process_password(message: Message, state: FSMContext):
-    PASSWORD = "12345"  # замени на свой
-    if message.text == PASSWORD:
+    from config import ADMIN_EVENT_PASSWORD
+    if (message.text or "").strip() == (ADMIN_EVENT_PASSWORD or ""):
         await clear_database()
         await message.answer("✅ База данных успешно очищена.")
     else:

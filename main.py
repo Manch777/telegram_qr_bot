@@ -74,25 +74,33 @@ dp.include_router(admin.router)
 dp.include_router(user.router)
 
 # Регистрируем deep-link обработчик
-dp.message.register(deep_link_start_handler, F.text.startswith("/start ") & F.text.len() > 7)
+dp.message.register(deep_link_start_handler, F.text.startswith("/start "))
 
 
 async def _set_webhook_background():
-    """Не блокируем запуск HTTP-сервера — пробуем выставить вебхук фоном."""
-    try:
-        info = await bot.get_webhook_info(request_timeout=10)
-        if (info.url or "") != FULL_WEBHOOK_URL:
-            await bot.set_webhook(
-                FULL_WEBHOOK_URL,
-                allowed_updates=["message", "callback_query", "channel_post"],
-                request_timeout=10,
-            )
-            print("✅ Webhook set")
-        else:
-            print("ℹ️ Webhook already set")
-    except (TelegramNetworkError, TelegramBadRequest) as e:
-        # Не критично для старта сервера — просто логируем.
-        print(f"[WARN] set_webhook skipped: {e}")
+    """Устанавливаем вебхук с несколькими ретраями в фоне."""
+    max_attempts = 5
+    delay_seconds = 2
+    for attempt in range(1, max_attempts + 1):
+        try:
+            info = await bot.get_webhook_info(request_timeout=10)
+            if (info.url or "") != FULL_WEBHOOK_URL:
+                await bot.set_webhook(
+                    FULL_WEBHOOK_URL,
+                    allowed_updates=["message", "callback_query", "channel_post"],
+                    request_timeout=10,
+                )
+                print("✅ Webhook set")
+            else:
+                print("ℹ️ Webhook already set")
+            return
+        except (TelegramNetworkError, TelegramBadRequest) as e:
+            print(f"[WARN] set_webhook attempt {attempt}/{max_attempts} failed: {e}")
+            if attempt < max_attempts:
+                await asyncio.sleep(delay_seconds)
+                delay_seconds = min(delay_seconds * 2, 30)
+            else:
+                print("[ERROR] Unable to set webhook after retries")
 
 async def on_startup(app: web.Application):
     # Если подлючение к БД может быть долгим — тоже можно вынести в фон:
