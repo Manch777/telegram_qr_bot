@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.types import BotCommand, Message
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 from aiogram.exceptions import TelegramNetworkError, TelegramBadRequest
+from aiogram.types.error_event import ErrorEvent
 from config import BOT_TOKEN, WEBHOOK_URL
 from database import connect_db, disconnect_db, get_status, update_status, get_status_by_id, update_status_by_id, get_row, get_ticket_type
 from handlers import user, admin
@@ -73,6 +74,16 @@ async def deep_link_start_handler(message: Message):
 dp.include_router(admin.router)
 dp.include_router(user.router)
 
+# Глобальный лог ошибок aiogram
+@dp.error()
+async def _on_error(event: ErrorEvent):
+    try:
+        print(f"[ERROR] Handler exception: {event.exception}")
+        if getattr(event, "update", None):
+            print(f"[ERROR] Update: {event.update}")
+    except Exception as e:
+        print(f"[ERROR] Failed to log error: {e}")
+
 # Регистрируем deep-link обработчик
 dp.message.register(deep_link_start_handler, F.text.startswith("/start "))
 
@@ -94,7 +105,7 @@ async def _set_webhook_background():
             await bot.set_webhook(
                 FULL_WEBHOOK_URL,
                 allowed_updates=["message", "callback_query", "channel_post"],
-                drop_pending_updates=False,
+                drop_pending_updates=True,
                 request_timeout=10,
             )
             print("✅ Webhook set (forced)", flush=True)
