@@ -101,6 +101,13 @@ async def _set_webhook_background():
             info = await bot.get_webhook_info(request_timeout=10)
             print(f"[DEBUG] Telegram current webhook before: '{info.url or ''}' (pending updates: {getattr(info, 'pending_update_count', 'n/a')})")
 
+            # Полный ресет: удаляем текущий вебхук (и подвисшие апдейты), затем ставим заново
+            try:
+                await bot.delete_webhook(drop_pending_updates=True, request_timeout=10)
+                print("ℹ️ Webhook deleted (reset)", flush=True)
+            except Exception as de:
+                print(f"[WARN] delete_webhook failed: {de}", flush=True)
+
             # Всегда переустанавливаем вебхук (на случай рассинхронизации у Telegram)
             await bot.set_webhook(
                 FULL_WEBHOOK_URL,
@@ -135,6 +142,11 @@ async def on_startup(app: web.Application):
         print(f"[WARN] set_my_commands: {e}")
 
     # Критично: не ждём Telegram — запускаем фоном
+    try:
+        me = await bot.get_me(request_timeout=10)
+        print(f"[INIT] Bot: @{getattr(me, 'username', '?')} (id={getattr(me, 'id', '?')})", flush=True)
+    except Exception as e:
+        print(f"[WARN] get_me failed: {e}", flush=True)
     print(f"[INIT] WEBHOOK_URL base: '{WEBHOOK_URL}' | FULL: '{FULL_WEBHOOK_URL}'", flush=True)
     asyncio.create_task(_set_webhook_background())
     print("✅ Startup finished (server will bind now)", flush=True)
@@ -159,7 +171,7 @@ async def set_webhook_now(request):
     return web.Response(text="Webhook setup triggered")
 
 def create_app():
-    app = web.Application()
+    app = web.Application(middlewares=[request_logger])
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
@@ -167,6 +179,22 @@ def create_app():
     app.router.add_get("/", root)
     app.router.add_get("/set-webhook", set_webhook_now)
     return app
+
+@web.middleware
+async def request_logger(request, handler):
+    try:
+        response = await handler(request)
+        try:
+            print(f"[HTTP] {request.method} {request.path} -> {response.status}")
+        except Exception:
+            pass
+        return response
+    except Exception as e:
+        try:
+            print(f"[HTTP][ERR] {request.method} {request.path}: {e}")
+        except Exception:
+            pass
+        raise
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "10000"))
