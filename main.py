@@ -88,17 +88,20 @@ async def _set_webhook_background():
     for attempt in range(1, max_attempts + 1):
         try:
             info = await bot.get_webhook_info(request_timeout=10)
-            print(f"[DEBUG] Telegram current webhook: '{info.url or ''}' (pending updates: {getattr(info, 'pending_update_count', 'n/a')})")
-            if (info.url or "") != FULL_WEBHOOK_URL:
-                await bot.set_webhook(
-                    FULL_WEBHOOK_URL,
-                    allowed_updates=["message", "callback_query", "channel_post"],
-                    drop_pending_updates=False,
-                    request_timeout=10,
-                )
-                print("✅ Webhook set", flush=True)
-            else:
-                print("ℹ️ Webhook already set", flush=True)
+            print(f"[DEBUG] Telegram current webhook before: '{info.url or ''}' (pending updates: {getattr(info, 'pending_update_count', 'n/a')})")
+
+            # Всегда переустанавливаем вебхук (на случай рассинхронизации у Telegram)
+            await bot.set_webhook(
+                FULL_WEBHOOK_URL,
+                allowed_updates=["message", "callback_query", "channel_post"],
+                drop_pending_updates=False,
+                request_timeout=10,
+            )
+            print("✅ Webhook set (forced)", flush=True)
+
+            # Подтвердим
+            info_after = await bot.get_webhook_info(request_timeout=10)
+            print(f"[DEBUG] Telegram current webhook after: '{info_after.url or ''}' (pending updates: {getattr(info_after, 'pending_update_count', 'n/a')})")
             return
         except (TelegramNetworkError, TelegramBadRequest) as e:
             print(f"[WARN] set_webhook attempt {attempt}/{max_attempts} failed: {e}", flush=True)
