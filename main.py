@@ -120,6 +120,21 @@ async def _set_webhook_background():
             # Подтвердим
             info_after = await bot.get_webhook_info(request_timeout=10)
             print(f"[DEBUG] Telegram current webhook after: '{info_after.url or ''}' (pending updates: {getattr(info_after, 'pending_update_count', 'n/a')})")
+
+            # Fallback: если по каким-то причинам Telegram не зафиксировал URL — дёрнем raw GET, как вручную
+            if not (info_after.url or "").strip():
+                try:
+                    raw_url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
+                    params = {"url": FULL_WEBHOOK_URL}
+                    async with ClientSession() as s:
+                        async with s.get(raw_url, params=params, timeout=15) as resp:
+                            payload = await resp.text()
+                            print(f"[FALLBACK] setWebhook raw response: {payload}")
+                    # и снова проверим
+                    info_after2 = await bot.get_webhook_info(request_timeout=10)
+                    print(f"[DEBUG] Telegram webhook after RAW: '{info_after2.url or ''}' (pending updates: {getattr(info_after2, 'pending_update_count', 'n/a')})")
+                except Exception as re:
+                    print(f"[FALLBACK][ERR] raw setWebhook failed: {re}")
             return
         except (TelegramNetworkError, TelegramBadRequest) as e:
             print(f"[WARN] set_webhook attempt {attempt}/{max_attempts} failed: {e}", flush=True)
