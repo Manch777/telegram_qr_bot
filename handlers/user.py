@@ -6,7 +6,13 @@ import json
 from aiogram.filters import CommandStart
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 
-from config import CHANNEL_ID, PAYMENT_LINK, INSTAGRAM_LINK
+from config import (
+    ADMIN_CONTACT,
+    CHANNEL_ID,
+    INSTAGRAM_LINK,
+    PAYMENT_LINK,
+    SBP_PAYMENT_DETAILS,
+)
 from database import (
     add_user,  get_row,
     get_paid_status_by_id, set_paid_status_by_id,
@@ -464,14 +470,20 @@ async def _present_payment(obj, ticket_type: str, from_message: bool = False):
     price = await _price_for_ticket(ticket_type)
     price_line = f"\nЦена: {price}" if price is not None else ""
 
+    payment_details = (
+        f"\n\nТакже можете оплатить переводом по СБП {SBP_PAYMENT_DETAILS}"
+        if SBP_PAYMENT_DETAILS
+        else ""
+    )
+
     text = (
         f"Тип билета: {pretty_type}\n"
         f"Мероприятие: {config.EVENT_CODE}"
         f"{price_line}\n\n"
         "После оплаты нажми «Я оплатил».\n"
         "⏳Ссылка на оплату действует 5 минут!\n"
-        "❗️Не забудь в комментариях платежа указать свой ник в telegram\n\n"
-        "Также можете оплатить переводом по СБП +79999257075 (ТБанк/Рокетбанк)"
+        "❗️Не забудь в комментариях платежа указать свой ник в Telegram"
+        f"{payment_details}"
     )
 
     bot = obj.bot
@@ -554,12 +566,22 @@ async def payment_confirmation(callback: CallbackQuery):
 
 
 # /help
-@router.message(lambda m: m.text == "/help")
+@router.message(lambda message: message.text == "/help")
 async def help_command(message: Message):
+    contact_text = (
+        f"\n{ADMIN_CONTACT}"
+        if ADMIN_CONTACT
+        else ""
+    )
+
     await _push_screen(
-        message.bot, message.from_user.id,
-        "ℹ️ Если возникли вопросы или проблемы, обратиcm к администратору:\n@stepanovvv13",
-        _back_to_start_kb()
+        message.bot,
+        message.from_user.id,
+        (
+            "ℹ️ Если возникли вопросы или проблемы, "
+            f"обратись к администратору:{contact_text}"
+        ),
+        _back_to_start_kb(),
     )
 
 # Тайм-аут оплаты
