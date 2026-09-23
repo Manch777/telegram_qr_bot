@@ -376,9 +376,13 @@ async def cb_adm_clear_db(
         return
 
     await callback.answer()
-    await start_clear_db(
-        callback.message,
-        state,
+
+    await callback.message.answer(
+        "❗️ Enter the password to clear the database:"
+    )
+
+    await state.set_state(
+        ClearDBStates.waiting_for_password
     )
 
 
