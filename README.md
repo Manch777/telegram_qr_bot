@@ -86,7 +86,6 @@ Administrative and scanner permissions are stored in the database.
 ```text
 Telegram_QR_Event_Bot/
 ├── handlers/
-│   ├── __init__.py
 │   ├── admin.py
 │   └── user.py
 ├── .dockerignore
