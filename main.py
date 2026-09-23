@@ -6,8 +6,9 @@ from aiogram.types import BotCommand, Message
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler
 from aiogram.exceptions import TelegramNetworkError, TelegramBadRequest
 from aiogram.types.error_event import ErrorEvent
+import config
 from config import BOT_TOKEN, WEBHOOK_URL
-from database import connect_db, disconnect_db, get_status, update_status, get_status_by_id, update_status_by_id, get_row, get_ticket_type
+from database import connect_db, disconnect_db, get_status, update_status, get_status_by_id, update_status_by_id, get_row, get_ticket_type, get_meta, set_meta
 from handlers import user, admin
 # duplicate import removed
 WEBHOOK_PATH = "/webhook"
@@ -147,6 +148,13 @@ async def _set_webhook_background():
 async def on_startup(app: web.Application):
     # Если подлючение к БД может быть долгим — тоже можно вынести в фон:
     await connect_db()
+    
+    saved_event_code = await get_meta("active_event_code")
+
+    if saved_event_code:
+        config.EVENT_CODE = saved_event_code
+    else:
+        await set_meta("active_event_code", config.EVENT_CODE)
     # Команды можно выставить быстро
     try:
         await bot.set_my_commands([
