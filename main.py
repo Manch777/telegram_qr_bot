@@ -160,8 +160,6 @@ async def on_startup(app: web.Application):
     try:
         me = await bot.get_me(request_timeout=10)
         print(f"[INIT] Bot: @{getattr(me, 'username', '?')} (id={getattr(me, 'id', '?')})", flush=True)
-        masked = (BOT_TOKEN[:10] + "…") if BOT_TOKEN else "(none)"
-        print(f"[INIT] BOT_TOKEN prefix: {masked}", flush=True)
     except Exception as e:
         print(f"[WARN] get_me failed: {e}", flush=True)
     print(f"[INIT] WEBHOOK_URL base: '{WEBHOOK_URL}' | FULL: '{FULL_WEBHOOK_URL}'", flush=True)
@@ -181,43 +179,6 @@ async def healthcheck(request):
 async def root(request):
     return web.Response(text="Bot is up. See /healthcheck")
 
-async def set_webhook_now(request):
-    # ручной триггер установки вебхука
-    asyncio.create_task(_set_webhook_background())
-    return web.Response(text="Webhook setup triggered")
-
-async def diag(request):
-    try:
-        me = await bot.get_me(request_timeout=10)
-        info = await bot.get_webhook_info(request_timeout=10)
-        data = {
-            "bot": {
-                "id": getattr(me, "id", None),
-                "username": getattr(me, "username", None),
-            },
-            "configured_full_url": FULL_WEBHOOK_URL,
-            "telegram_webhook": {
-                "url": getattr(info, "url", None),
-                "pending": getattr(info, "pending_update_count", None),
-                "ip_address": getattr(info, "ip_address", None),
-                "last_error_message": getattr(info, "last_error_message", None),
-            },
-        }
-    except Exception as e:
-        return web.json_response({"error": str(e)}, status=500)
-    return web.json_response(data)
-
-async def set_webhook_raw(request):
-    # Диагностический прямой вызов Telegram API (как ваша ручная ссылка)
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/setWebhook"
-    params = {"url": FULL_WEBHOOK_URL}
-    try:
-        async with ClientSession() as s:
-            async with s.get(url, params=params, timeout=15) as resp:
-                payload = await resp.text()
-                return web.Response(text=payload, content_type="application/json")
-    except Exception as e:
-        return web.json_response({"error": str(e)}, status=500)
 
 def create_app():
     app = web.Application(middlewares=[request_logger])
@@ -226,9 +187,7 @@ def create_app():
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
     app.router.add_get("/healthcheck", healthcheck)
     app.router.add_get("/", root)
-    app.router.add_get("/set-webhook", set_webhook_now)
-    app.router.add_get("/set-webhook-raw", set_webhook_raw)
-    app.router.add_get("/diag", diag)
+    
     return app
 
 @web.middleware
