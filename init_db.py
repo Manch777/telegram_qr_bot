@@ -1,5 +1,10 @@
-from database import metadata, engine, users  # Обязательно импортируй таблицу!
+from database import engine, metadata
+
 
 if __name__ == "__main__":
-    metadata.create_all(engine, checkfirst=True)
-    print("✅ Таблица users создана.")
+    metadata.create_all(
+        engine,
+        checkfirst=True,
+    )
+
+    print("✅ Database tables initialized.")
