@@ -4,10 +4,40 @@ services:
     runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
+
     envVars:
       - key: BOT_TOKEN
-        value: YOUR_TOKEN
+        sync: false
+
       - key: POSTGRES_URL
-        value: YOUR_DB
+        sync: false
+
+      - key: ADMIN_EVENT_PASSWORD
+        sync: false
+
+      - key: ADMIN_BROADCAST_PASSWORD
+        sync: false
+
+      - key: CHANNEL_ID
+        sync: false
+
+      - key: INSTAGRAM_LINK
+        sync: false
+
+      - key: SCAN_WEBAPP_URL
+        sync: false
+
+      - key: PAYMENT_LINK
+        sync: false
+
+      - key: PROMOCODES
+        sync: false
+
+      - key: EVENT_CODE
+        sync: false
+
+      - key: EVENT_TITLE
+        sync: false
+
       - key: WEBHOOK_URL
         value: https://telegram-qr-bot-6hs0.onrender.com
