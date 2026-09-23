@@ -55,9 +55,9 @@ def _event_off() -> bool:
 
 def _root_text() -> str:
     return (
-        "Хей! Приветствуем тебя в ЖАЖДА community 🖤\n"
-        "Теперь ты точно знаешь, где лучшие тусовки\n\n"
-        "Выбери, что хочешь сделать 👇"
+        "Hey! Welcome to the ZHAZHDA community 🖤\n"
+        "Now you know where to find the best parties.\n\n"
+        "Choose what you'd like to do 👇"
     )
 
 
@@ -66,19 +66,19 @@ def _root_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Подписаться на Telegram",
+                    text="✅ Follow on Telegram",
                     url=f"https://t.me/{CHANNEL_ID.lstrip('@')}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="📷 Подписаться на Instagram",
+                    text="📷 Follow on Instagram",
                     url=INSTAGRAM_LINK,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🎟 Оплатить билет",
+                    text="🎟 Buy a Ticket",
                     callback_data="buy_ticket_menu",
                 )
             ],
@@ -99,7 +99,7 @@ async def _ticket_menu_kb() -> InlineKeyboardMarkup:
         rows.append(
             [
                 InlineKeyboardButton(
-                    text="🎫 Билет 1+1",
+                    text="🎫 1+1 Ticket",
                     callback_data="ticket_1plus1",
                 )
             ]
@@ -108,23 +108,25 @@ async def _ticket_menu_kb() -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(
-                text="🎫 1 билет",
+                text="🎫 Single Ticket",
                 callback_data="ticket_single",
             )
         ]
     )
+
     rows.append(
         [
             InlineKeyboardButton(
-                text="🎟 У меня есть промокод",
+                text="🎟 I Have a Promo Code",
                 callback_data="ticket_promocode",
             )
         ]
     )
+
     rows.append(
         [
             InlineKeyboardButton(
-                text="⬅️ Вернуться назад",
+                text="⬅️ Back",
                 callback_data="back:start",
             )
         ]
@@ -138,7 +140,7 @@ def _back_to_start_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="⬅️ Вернуться назад",
+                    text="⬅️ Back",
                     callback_data="back:start",
                 )
             ]
@@ -151,7 +153,7 @@ def _back_to_ticket_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="⬅️ Вернуться назад",
+                    text="⬅️ Back",
                     callback_data="back:ticket",
                 )
             ]
@@ -164,19 +166,19 @@ def _payment_kb(row_id: int) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="💳 Оплатить",
+                    text="💳 Pay",
                     url=PAYMENT_LINK,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="✅ Я оплатил",
+                    text="✅ I Have Paid",
                     callback_data=f"paid_row:{row_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="⬅️ Вернуться назад",
+                    text="⬅️ Back",
                     callback_data="back:ticket",
                 )
             ],
@@ -219,8 +221,8 @@ async def back_from_reject(callback: CallbackQuery):
             callback.bot,
             callback.from_user.id,
             (
-                "Сейчас мероприятий нет. "
-                "Мы сообщим, как только объявим новое событие. 🖤"
+                "There are no active events right now. "
+                "We'll let you know as soon as a new event is announced. 🖤"
             ),
             _back_to_start_kb(),
         )
@@ -296,7 +298,7 @@ async def _show_ticket_menu(bot, chat_id: int):
     return await _push_screen(
         bot,
         chat_id,
-        "Выбери тип билета:",
+        "Choose a ticket type:",
         kb,
     )
 
@@ -329,13 +331,13 @@ async def _notify_wishers_1p1_available(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🎟 Оплатить билет",
+                    text="🎟 Buy a Ticket",
                     callback_data="ticket_1plus1",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="⬅️ Вернуться назад",
+                    text="⬅️ Back",
                     callback_data="back:ticket",
                 )
             ],
@@ -351,8 +353,8 @@ async def _notify_wishers_1p1_available(
             await bot.send_message(
                 user_id,
                 (
-                    f"✨ Освободились билеты 1+1 на "
-                    f"«{event_code}». Успей забрать 👇"
+                    f"✨ 1+1 tickets are available again for "
+                    f"“{event_code}”. Get yours while they last 👇"
                 ),
                 reply_markup=kb,
             )
@@ -404,8 +406,8 @@ async def back_ticket(callback: CallbackQuery):
             callback.bot,
             callback.from_user.id,
             (
-                "Сейчас мероприятий нет. "
-                "Мы сообщим, как только объявим новое событие. 🖤"
+                "There are no active events right now. "
+                "We'll let you know as soon as a new event is announced. 🖤"
             ),
             _back_to_start_kb(),
         )
@@ -437,15 +439,15 @@ async def ticket_menu(callback: CallbackQuery):
             callback.bot,
             callback.from_user.id,
             (
-                "Сейчас мероприятий нет.\n"
-                "Мы сообщим, как только объявим следующее событие. 🖤"
+                "There are no active events right now.\n"
+                "We'll let you know as soon as the next event is announced. 🖤"
             ),
             _back_to_start_kb(),
         )
         return
 
     # Create a draft purchase before the user selects a ticket type.
-    username = callback.from_user.username or "Без ника"
+    username = callback.from_user.username or "No username"
 
     draft_row_id = await add_user(
         user_id=callback.from_user.id,
@@ -479,8 +481,8 @@ async def buy_1plus1(callback: CallbackQuery):
             callback.bot,
             callback.from_user.id,
             (
-                "Сейчас мероприятий нет. "
-                "Как только появится новое — пришлём уведомление. 🖤"
+                "There are no active events right now. "
+                "We'll notify you as soon as a new event is announced. 🖤"
             ),
             _back_to_start_kb(),
         )
@@ -500,7 +502,7 @@ async def buy_1plus1(callback: CallbackQuery):
         await _push_screen(
             callback.bot,
             callback.from_user.id,
-            "❌ Акция '1+1' сейчас недоступна для этого мероприятия.",
+            "❌ The 1+1 offer is currently unavailable for this event.",
             _back_to_ticket_kb(),
         )
         return
@@ -519,7 +521,7 @@ async def buy_1plus1(callback: CallbackQuery):
         await _push_screen(
             callback.bot,
             callback.from_user.id,
-            "❌ Акция '1+1' больше недоступна для этого мероприятия.",
+            "❌ The 1+1 offer is no longer available for this event.",
             _back_to_ticket_kb(),
         )
         return
@@ -539,8 +541,8 @@ async def buy_single(callback: CallbackQuery):
             callback.bot,
             callback.from_user.id,
             (
-                "Сейчас мероприятий нет. "
-                "Как только появится новое — пришлём уведомление. 🖤"
+                "There are no active events right now. "
+                "We'll notify you as soon as a new event is announced. 🖤"
             ),
             _back_to_start_kb(),
         )
@@ -565,9 +567,9 @@ async def ask_promocode(callback: CallbackQuery):
             callback.bot,
             callback.from_user.id,
             (
-                "Сейчас мероприятий нет. "
-                "Как только объявим новое событие — "
-                "можно будет применить промокод. 🖤"
+                "There are no active events right now. "
+                "Once a new event is announced, "
+                "you'll be able to use a promo code. 🖤"
             ),
             _back_to_start_kb(),
         )
@@ -579,7 +581,7 @@ async def ask_promocode(callback: CallbackQuery):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="⬅️ Вернуться назад",
+                    text="⬅️ Back",
                     callback_data="promo_cancel",
                 )
             ]
@@ -589,7 +591,7 @@ async def ask_promocode(callback: CallbackQuery):
     await _push_screen(
         callback.bot,
         callback.from_user.id,
-        "Введи промокод одним сообщением:",
+        "Enter your promo code in a single message:",
         kb,
     )
 
@@ -604,7 +606,7 @@ async def cancel_promocode(callback: CallbackQuery):
         await _push_screen(
             callback.bot,
             callback.from_user.id,
-            "Отменено. Сейчас мероприятий нет. /start",
+            "Cancelled. There are no active events right now. /start",
             _back_to_start_kb(),
         )
     else:
@@ -680,8 +682,8 @@ async def handle_promocode(message: Message):
             message.bot,
             message.from_user.id,
             (
-                "Сейчас мероприятий нет. "
-                "Промокод можно будет применить позже."
+                "There are no active events right now. "
+                "You'll be able to use a promo code later."
             ),
             _back_to_start_kb(),
         )
@@ -695,7 +697,7 @@ async def handle_promocode(message: Message):
 
     if user_code not in valid_codes:
         await message.answer(
-            "❌ Неверный промокод. Попробуй снова."
+            "❌ Invalid promo code. Please try again."
         )
         return
 
@@ -766,8 +768,8 @@ async def _present_payment(
             target.bot,
             target.chat.id,
             (
-                "Сейчас мероприятий нет. "
-                "Скоро расскажем про новое событие. 🖤"
+                "There are no active events right now. "
+                "We'll announce a new event soon. 🖤"
             ),
             _back_to_start_kb(),
         )
@@ -775,7 +777,7 @@ async def _present_payment(
 
     user = obj.from_user
     user_id = user.id
-    username = user.username or "Без ника"
+    username = user.username or "No username"
 
     # Reuse the draft purchase created when the user opened the ticket menu.
     draft_raw = await get_meta(
@@ -809,20 +811,20 @@ async def _present_payment(
             str(row_id),
         )
 
-    # Mark the purchase as being in the payment process.
+    # Keep the existing database status value for compatibility.
     await set_paid_status_by_id(
         row_id,
         "в процессе оплаты",
     )
 
     title_map = {
-        "single": "1 билет",
-        "1+1": "Билет 1+1",
+        "single": "Single Ticket",
+        "1+1": "1+1 Ticket",
     }
 
     pretty_type = title_map.get(
         ticket_type,
-        f"Промокод «{ticket_type}»",
+        f"Promo Code “{ticket_type}”",
     )
 
     price = await _price_for_ticket(
@@ -830,24 +832,25 @@ async def _present_payment(
     )
 
     price_line = (
-        f"\nЦена: {price}"
+        f"\nPrice: {price}"
         if price is not None
         else ""
     )
 
     payment_details = (
-        f"\n\nТакже можете оплатить переводом по СБП {SBP_PAYMENT_DETAILS}"
+        f"\n\nYou can also pay via SBP transfer: {SBP_PAYMENT_DETAILS}"
         if SBP_PAYMENT_DETAILS
         else ""
     )
 
     text = (
-        f"Тип билета: {pretty_type}\n"
-        f"Мероприятие: {config.EVENT_CODE}"
+        f"Ticket type: {pretty_type}\n"
+        f"Event: {config.EVENT_CODE}"
         f"{price_line}\n\n"
-        "После оплаты нажми «Я оплатил».\n"
-        "⏳Ссылка на оплату действует 5 минут!\n"
-        "❗️Не забудь в комментариях платежа указать свой ник в Telegram"
+        "After payment, tap “I Have Paid”.\n"
+        "⏳ The payment link is valid for 5 minutes!\n"
+        "❗️ Don't forget to include your Telegram username "
+        "in the payment comment."
         f"{payment_details}"
     )
 
@@ -886,7 +889,7 @@ async def payment_confirmation(
     row_id = int(
         callback.data.split(":")[1]
     )
-    username = user.username or "Без ника"
+    username = user.username or "No username"
 
     row = await get_row(row_id)
 
@@ -894,7 +897,7 @@ async def payment_confirmation(
         await _push_screen(
             callback.bot,
             user.id,
-            "❌ Билет не найден.",
+            "❌ Ticket not found.",
             _back_to_ticket_kb(),
         )
         return
@@ -904,13 +907,14 @@ async def payment_confirmation(
         row_id
     )
 
+    # Keep existing database status values for compatibility.
     if paid_status == "оплатил":
         await _push_screen(
             callback.bot,
             user.id,
             (
-                "✅ Вы уже оплатили. "
-                "QR-код был отправлен ранее."
+                "✅ Your payment has already been confirmed. "
+                "The QR code was sent earlier."
             ),
             _back_to_start_kb(),
         )
@@ -921,8 +925,8 @@ async def payment_confirmation(
             callback.bot,
             user.id,
             (
-                "⏳ Ваша оплата уже на проверке. "
-                "Пожалуйста, подождите."
+                "⏳ Your payment is already under review. "
+                "Please wait."
             ),
             _back_to_start_kb(),
         )
@@ -938,8 +942,8 @@ async def payment_confirmation(
         callback.bot,
         user.id,
         (
-            "⏳Проверяем оплату\n"
-            "Отправим QR с проходкой сразу после проверки 🖤"
+            "⏳ Reviewing your payment\n"
+            "We'll send your QR ticket as soon as the payment is approved. 🖤"
         ),
         _back_to_start_kb(),
     )
@@ -954,13 +958,13 @@ async def payment_confirmation(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Подтвердить оплату",
+                    text="✅ Approve Payment",
                     callback_data=f"approve_row:{row_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="❌ Не подтверждена",
+                    text="❌ Reject Payment",
                     callback_data=f"reject_row:{row_id}",
                 )
             ],
@@ -987,8 +991,8 @@ async def payment_confirmation(
         await callback.bot.send_message(
             chat_id=recipient_id,
             text=(
-                f"💰 Подтверждение оплаты пользователя @{username}\n"
-                f"Тип билета: {ticket_type}"
+                f"💰 Payment confirmation for @{username}\n"
+                f"Ticket type: {ticket_type}"
             ),
             reply_markup=kb_admin,
         )
@@ -1012,8 +1016,8 @@ async def help_command(message: Message):
         message.bot,
         message.from_user.id,
         (
-            "ℹ️ Если возникли вопросы или проблемы, "
-            f"обратись к администратору:{contact_text}"
+            "ℹ️ If you have any questions or issues, "
+            f"contact the administrator:{contact_text}"
         ),
         _back_to_start_kb(),
     )
@@ -1052,6 +1056,7 @@ async def _expire_payment_after(
         row_id
     )
 
+    # Keep existing database status values for compatibility.
     if status == "в процессе оплаты":
         try:
             await set_paid_status_by_id(
@@ -1076,8 +1081,8 @@ async def _expire_payment_after(
             bot,
             chat_id,
             (
-                "⏰ Время оплаты истекло.\n"
-                "Выберите тип билета заново:"
+                "⏰ Payment time has expired.\n"
+                "Please choose a ticket type again:"
             ),
             kb,
         )
