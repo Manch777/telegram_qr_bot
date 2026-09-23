@@ -84,7 +84,7 @@ Administrative and scanner permissions are stored in the database.
 ## Project Structure
 
 ```text
-telegram_qr_bot/
+Telegram_QR_Event_Bot/
 ├── handlers/
 │   ├── __init__.py
 │   ├── admin.py
@@ -167,7 +167,7 @@ Never commit real tokens, passwords, payment information, or database credential
 
 ```bash
 git clone <repository-url>
-cd telegram_qr_bot
+cd Telegram_QR_Event_Bot
 ```
 
 ### 2. Create a virtual environment
