@@ -307,26 +307,27 @@ The bot and scanner are maintained in separate repositories because they have in
 ┌──────────────────────┐
 │    Telegram User     │
 └──────────┬───────────┘
-           │
+           │ Registration / Payment
            ▼
 ┌──────────────────────┐
 │ Telegram QR Event Bot│
 │      (aiogram)       │
-└──────────┬───────────┘
-           │
-           ├──────────────► PostgreSQL
-           │
-           ▼
+└──────┬─────────┬─────┘
+       │         │
+       │         └────────────► PostgreSQL
+       │
+       ▼
 ┌──────────────────────┐
 │      QR Ticket       │
 └──────────┬───────────┘
            │
+           │ Scanned by event staff
            ▼
 ┌──────────────────────┐
 │ Telegram QR Scanner  │
 │   (Browser / ZXing)  │
 └──────────┬───────────┘
-           │
+           │ QR payload
            ▼
 ┌──────────────────────┐
 │ Telegram Deep Link   │
@@ -334,8 +335,13 @@ The bot and scanner are maintained in separate repositories because they have in
            │
            ▼
 ┌──────────────────────┐
+│ Telegram QR Event Bot│
 │  Ticket Validation   │
-│     & Admission      │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│      Admission       │
 └──────────────────────┘
 ```
 
