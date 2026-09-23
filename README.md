@@ -2,7 +2,7 @@
 
 A production-oriented Telegram bot for event registration, ticket management, payment confirmation, QR-based admission, and event administration.
 
-The project combines a Telegram bot, PostgreSQL database, QR ticket generation, an external web-based QR scanner, administrative tools, and deployment configuration.
+The project combines a Telegram bot, PostgreSQL database, QR ticket generation, a companion web-based QR scanner, administrative tools, and deployment configuration.
 
 ## Features
 
@@ -40,12 +40,14 @@ The bot works together with a separate web-based QR scanner designed for event s
 The scanner:
 
 - Uses the device camera
-- Reads QR codes in the browser
-- Redirects scanned tickets to the Telegram bot
+- Reads QR codes directly in the browser
+- Redirects scanned ticket data to the Telegram bot
 - Supports the bot's ticket validation workflow
-- Can be opened from Telegram as a Web App
+- Provides a mobile-friendly interface for event admission
 
-The scanner frontend is maintained as a separate companion repository.
+The scanner frontend is maintained as a separate companion repository:
+
+**[Telegram QR Scanner](https://github.com/Manch777/Telegram_QR_Scanner)**
 
 ### Administration
 
@@ -86,6 +88,7 @@ Administrative and scanner permissions are stored in the database.
 ```text
 Telegram_QR_Event_Bot/
 ├── handlers/
+│   ├── __init__.py
 │   ├── admin.py
 │   └── user.py
 ├── .dockerignore
@@ -165,7 +168,7 @@ Never commit real tokens, passwords, payment information, or database credential
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/Manch777/Telegram_QR_Event_Bot.git
 cd Telegram_QR_Event_Bot
 ```
 
@@ -252,7 +255,7 @@ Ticket record
       ↓
 QR generation
       ↓
-QR scanner
+Web scanner
       ↓
 Telegram deep link
       ↓
@@ -290,15 +293,57 @@ The application is designed to run as an aiohttp web service with Telegram webho
 
 ## Companion QR Scanner
 
-This project is designed to work with a separate lightweight web application responsible for camera-based QR scanning.
+The project includes a separate lightweight web application responsible for camera-based QR scanning:
 
-The scanner and Telegram bot are kept in separate repositories because they have independent deployment lifecycles, while together they form a single event ticketing system.
+**[Telegram QR Scanner](https://github.com/Manch777/Telegram_QR_Scanner)**
+
+The scanner reads the QR payload in the browser and forwards it to the Telegram bot through a Telegram deep link. Ticket validation and admission logic remain on the bot/backend side.
+
+The bot and scanner are maintained in separate repositories because they have independent deployment lifecycles, while together they form a single event ticketing system.
+
+### System Overview
+
+```text
+┌──────────────────────┐
+│    Telegram User     │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Telegram QR Event Bot│
+│      (aiogram)       │
+└──────────┬───────────┘
+           │
+           ├──────────────► PostgreSQL
+           │
+           ▼
+┌──────────────────────┐
+│      QR Ticket       │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Telegram QR Scanner  │
+│   (Browser / ZXing)  │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Telegram Deep Link   │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Ticket Validation   │
+│     & Admission      │
+└──────────────────────┘
+```
 
 ## Project Status
 
 The project has been deployed and used as a working event-management solution.
 
-The repository has been cleaned for portfolio presentation while preserving compatibility with the existing production workflow.
+The repositories have been prepared for portfolio presentation while preserving compatibility with the existing production workflow.
 
 ## License
 
