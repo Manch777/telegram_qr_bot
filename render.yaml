@@ -30,6 +30,12 @@ services:
       - key: PAYMENT_LINK
         sync: false
 
+      - key: SBP_PAYMENT_DETAILS
+        sync: false
+
+      - key: ADMIN_CONTACT
+        sync: false
+
       - key: PROMOCODES
         sync: false
 
