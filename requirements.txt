@@ -2,11 +2,9 @@ aiogram==3.4.1
 databases[postgresql]==0.8.0
 sqlalchemy==1.4.42
 asyncpg==0.29.0
+aiohttp
 openpyxl==3.1.2
 qrcode==7.4.2
 pillow==10.2.0
 python-dotenv==1.0.1
 psycopg2-binary==2.9.9
-fastapi==0.111.0
-uvicorn==0.30.1
-aiohttp
