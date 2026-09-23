@@ -1,14 +1,14 @@
 FROM python:3.11-slim
 
-# Создание рабочей директории
+# Set the working directory
 WORKDIR /app
 
-# Установка зависимостей
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копирование исходного кода
+# Copy the application source code
 COPY . .
 
-# Запуск бота
+# Start the bot
 CMD ["python", "main.py"]
