@@ -2,7 +2,11 @@ from aiogram import Router, F
 import config
 import json
 import asyncio
-from config import INSTAGRAM_LINK, ADMIN_BROADCAST_PASSWORD
+from config import (
+    ADMIN_BROADCAST_PASSWORD,
+    ADMIN_CONTACT,
+    INSTAGRAM_LINK,
+)
 import re
 from openpyxl import Workbook
 from io import BytesIO
@@ -27,7 +31,7 @@ from database import (
     set_one_plus_one_limit, get_one_plus_one_limit,
     count_one_plus_one_taken, remaining_one_plus_one_for_event,
     get_ticket_stats_grouped, get_ticket_stats_for_event,
-    get_all_users_full, get_all_subscribers, has_role, add_role, remove_role, get_role_user_ids,
+    get_all_users_full, has_role, add_role, remove_role, get_role_user_ids,
 )
 from config import SCAN_WEBAPP_URL, CHANNEL_ID, PAYMENT_LINK, ADMIN_EVENT_PASSWORD
 
@@ -378,13 +382,21 @@ async def reject_payment(callback: CallbackQuery):
         [InlineKeyboardButton(text="✅ Я оплатил", callback_data=f"paid_row:{row_id}")],
         [InlineKeyboardButton(text="⬅️ Вернуться назад", callback_data=f"back_to_menu:{row_id}")],
     ])
+    
+    admin_contact_text = (
+        f" или свяжись с администратором: {ADMIN_CONTACT}"
+        if ADMIN_CONTACT
+        else ""
+    )
+
     sent = await callback.bot.send_message(
         chat_id=row["user_id"],
         text=(
             "💔 Упс! Кажется, оплата не прошла\n"
-            "Пожалуйста, проверь правильность платежа или свяжись с администратором: @stepanovvv13"
+            "Пожалуйста, проверь правильность платежа"
+            f"{admin_contact_text}"
         ),
-        reply_markup=kb
+        reply_markup=kb,
     )
     
     uid = row["user_id"]
@@ -716,7 +728,6 @@ async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id
     ticket_type = (row["ticket_type"] or "").strip().lower() if row else ""
     event_code = row["event_code"] if row else None
 
-    from database import get_paid_status_by_id
     status = await get_paid_status_by_id(row_id)
 
     if status in ("не оплатил", "отклонено"):
