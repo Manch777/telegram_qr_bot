@@ -88,27 +88,27 @@ async def admin_panel(message: Message):
             [
                 BotCommand(
                     command="analytics",
-                    description="📊 Аналитическая сводка мероприятия",
+                    description="📊 Event analytics summary",
                 ),
                 BotCommand(
                     command="event_tool_set",
-                    description="🛠 Управление мероприятием",
+                    description="🛠 Event management",
                 ),
                 BotCommand(
                     command="admin_tool_set",
-                    description="🧰 Администрирование",
+                    description="🧰 Administration",
                 ),
                 BotCommand(
                     command="exit_admin",
-                    description="↩️ Вернуться в пользовательское меню",
+                    description="↩️ Return to user menu",
                 ),
             ],
             scope=BotCommandScopeChat(chat_id=uid),
         )
 
         await message.answer(
-            "🛡 Режим администратора включён. "
-            "Выбери нужный набор команд в меню."
+            "🛡 Administrator mode enabled. "
+            "Choose the command set you need from the menu."
         )
         return
 
@@ -118,11 +118,11 @@ async def admin_panel(message: Message):
             [
                 BotCommand(
                     command="scanner",
-                    description="📷 Открыть сканер",
+                    description="📷 Open Scanner",
                 ),
                 BotCommand(
                     command="exit_admin",
-                    description="↩️ Вернуться в пользовательское меню",
+                    description="↩️ Return to user menu",
                 ),
             ],
             scope=BotCommandScopeChat(chat_id=uid),
@@ -132,7 +132,7 @@ async def admin_panel(message: Message):
             inline_keyboard=[
                 [
                     InlineKeyboardButton(
-                        text="📷 Открыть сканер",
+                        text="📷 Open Scanner",
                         url=SCAN_WEBAPP_URL,
                     )
                 ]
@@ -140,13 +140,13 @@ async def admin_panel(message: Message):
         )
 
         await message.answer(
-            "🛡 Режим сканера включён.",
+            "🛡 Scanner mode enabled.",
             reply_markup=kb,
         )
         return
 
     await message.answer(
-        "🚫 У вас нет доступа к панели администратора."
+        "🚫 You do not have access to the admin panel."
     )
 
 
@@ -155,37 +155,37 @@ def _kb_analytics() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="📊 Статистика",
+                    text="📊 Statistics",
                     callback_data="an:report",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="📊 Проданные билеты (текущее)",
+                    text="📊 Sold Tickets (Current Event)",
                     callback_data="an:stats_this",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="📝 Кто хотел 1+1",
+                    text="📝 1+1 Waiting List",
                     callback_data="an:wishers",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="💰 Выручка",
+                    text="💰 Revenue",
                     callback_data="an:revenue",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="📤 Выгрузить (текущее)",
+                    text="📤 Export (Current Event)",
                     callback_data="an:export_this",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="📤 Выгрузить (все)",
+                    text="📤 Export (All Events)",
                     callback_data="an:export_all",
                 )
             ],
@@ -198,19 +198,19 @@ def _kb_event_tools() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔁 Сменить мероприятие",
+                    text="🔁 Change Event",
                     callback_data="change_event_menu",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="📣 Разослать последний пост",
+                    text="📣 Broadcast Latest Post",
                     callback_data="broadcast_last",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="📷 Открыть сканер",
+                    text="📷 Open Scanner",
                     url=SCAN_WEBAPP_URL,
                 )
             ],
@@ -223,13 +223,13 @@ def _kb_admin_tools() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔐 Управление доступом к сканеру",
+                    text="🔐 Manage Scanner Access",
                     callback_data="scan_access_menu",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🧹 Очистить базу",
+                    text="🧹 Clear Database",
                     callback_data="adm:clear_db",
                 )
             ],
@@ -240,11 +240,11 @@ def _kb_admin_tools() -> InlineKeyboardMarkup:
 @router.message(lambda m: m.text == "/analytics")
 async def admin_menu_analytics(message: Message):
     if not await is_full_admin(message.from_user.id):
-        await message.answer("🚫 Недостаточно прав.")
+        await message.answer("🚫 Insufficient permissions.")
         return
 
     await message.answer(
-        "Выберите сводку:",
+        "Choose a report:",
         reply_markup=_kb_analytics(),
     )
 
@@ -252,11 +252,11 @@ async def admin_menu_analytics(message: Message):
 @router.message(lambda m: m.text == "/event_tool_set")
 async def admin_menu_event_tools(message: Message):
     if not await is_full_admin(message.from_user.id):
-        await message.answer("🚫 Недостаточно прав.")
+        await message.answer("🚫 Insufficient permissions.")
         return
 
     await message.answer(
-        "Инструменты мероприятия:",
+        "Event tools:",
         reply_markup=_kb_event_tools(),
     )
 
@@ -264,11 +264,11 @@ async def admin_menu_event_tools(message: Message):
 @router.message(lambda m: m.text == "/admin_tool_set")
 async def admin_menu_admin_tools(message: Message):
     if not await is_full_admin(message.from_user.id):
-        await message.answer("🚫 Недостаточно прав.")
+        await message.answer("🚫 Insufficient permissions.")
         return
 
     await message.answer(
-        "Администрирование:",
+        "Administration:",
         reply_markup=_kb_admin_tools(),
     )
 
@@ -277,7 +277,7 @@ async def admin_menu_admin_tools(message: Message):
 async def cb_an_report(callback: CallbackQuery):
     if not await is_full_admin(callback.from_user.id):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -293,7 +293,7 @@ async def cb_an_report(callback: CallbackQuery):
 async def cb_an_stats_this(callback: CallbackQuery):
     if not await is_full_admin(callback.from_user.id):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -309,7 +309,7 @@ async def cb_an_stats_this(callback: CallbackQuery):
 async def cb_an_wishers(callback: CallbackQuery):
     if not await is_full_admin(callback.from_user.id):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -325,13 +325,13 @@ async def cb_an_wishers(callback: CallbackQuery):
 async def cb_an_export_this(callback: CallbackQuery):
     if not await is_full_admin(callback.from_user.id):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
 
     await callback.answer(
-        "Готовлю выгрузку…",
+        "Preparing export…",
         show_alert=False,
     )
 
@@ -346,13 +346,13 @@ async def cb_an_export_this(callback: CallbackQuery):
 async def cb_an_export_all(callback: CallbackQuery):
     if not await is_full_admin(callback.from_user.id):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
 
     await callback.answer(
-        "Готовлю выгрузку…",
+        "Preparing export…",
         show_alert=False,
     )
 
@@ -370,7 +370,7 @@ async def cb_adm_clear_db(
 ):
     if not await is_full_admin(callback.from_user.id):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -390,7 +390,7 @@ async def cb_adm_clear_db(
 async def handle_webapp_data(message: Message):
     if not await _can_use_scanner(message.from_user.id):
         await message.answer(
-            "🚫 Нет прав на сканирование."
+            "🚫 You do not have permission to scan tickets."
         )
         return
 
@@ -400,7 +400,7 @@ async def handle_webapp_data(message: Message):
 
     if not payload:
         await message.answer(
-            "⚠️ Пустые данные из сканера."
+            "⚠️ The scanner returned empty data."
         )
         return
 
@@ -411,7 +411,7 @@ async def handle_webapp_data(message: Message):
 
         if status is None:
             await message.answer(
-                "❌ QR-код не найден."
+                "❌ QR code not found."
             )
 
         elif status == "не активирован":
@@ -421,13 +421,13 @@ async def handle_webapp_data(message: Message):
             )
 
             await message.answer(
-                "✅ Пропуск активирован. "
-                "Удачного мероприятия!"
+                "✅ Ticket activated. "
+                "Enjoy the event!"
             )
 
         else:
             await message.answer(
-                "⚠️ Этот QR-код уже был использован."
+                "⚠️ This QR code has already been used."
             )
 
         return
@@ -448,7 +448,7 @@ async def handle_webapp_data(message: Message):
         candidate = int(num_str)
     except ValueError:
         await message.answer(
-            "⚠️ Неверный формат QR."
+            "⚠️ Invalid QR code format."
         )
         return
 
@@ -463,13 +463,13 @@ async def handle_webapp_data(message: Message):
             )
 
             await message.answer(
-                "✅ Пропуск активирован. "
-                "Удачного мероприятия!"
+                "✅ Ticket activated. "
+                "Enjoy the event!"
             )
 
         else:
             await message.answer(
-                "⚠️ Этот QR-код уже был использован."
+                "⚠️ This QR code has already been used."
             )
 
         return
@@ -479,7 +479,7 @@ async def handle_webapp_data(message: Message):
 
     if row is None:
         await message.answer(
-            "❌ QR-код не найден."
+            "❌ QR code not found."
         )
         return
 
@@ -494,13 +494,13 @@ async def handle_webapp_data(message: Message):
         )
 
         await message.answer(
-            "✅ Пропуск активирован. "
-            "Удачного мероприятия!"
+            "✅ Ticket activated. "
+            "Enjoy the event!"
         )
 
     else:
         await message.answer(
-            "⚠️ Этот QR-код уже был использован."
+            "⚠️ This QR code has already been used."
         )
 
 
@@ -512,7 +512,7 @@ async def handle_webapp_data(message: Message):
 async def report(message: Message):
     if not await is_full_admin(message.from_user.id):
         await message.answer(
-            "🚫 У вас нет прав для этой команды."
+            "🚫 You do not have permission to use this command."
         )
         return
 
@@ -525,7 +525,7 @@ async def report(message: Message):
 async def export_users_excel(message: Message):
     if not await is_full_admin(message.from_user.id):
         await message.answer(
-            "🚫 У вас нет прав для этой команды."
+            "🚫 You do not have permission to use this command."
         )
         return
 
@@ -542,7 +542,7 @@ async def export_users_excel(message: Message):
 async def ticket_stats_this(message: Message):
     if not await is_full_admin(message.from_user.id):
         await message.answer(
-            "🚫 У вас нет прав для этой команды."
+            "🚫 You do not have permission to use this command."
         )
         return
 
@@ -574,11 +574,11 @@ async def exit_admin_mode(message: Message):
     commands = [
         BotCommand(
             command="start",
-            description="Начать",
+            description="Start",
         ),
         BotCommand(
             command="help",
-            description="ℹ️ Помощь / Связь с админом",
+            description="ℹ️ Help / Contact Admin",
         ),
     ]
 
@@ -590,7 +590,7 @@ async def exit_admin_mode(message: Message):
         commands.append(
             BotCommand(
                 command="admin",
-                description="🛡 Режим администратора",
+                description="🛡 Administrator Mode",
             )
         )
 
@@ -602,8 +602,8 @@ async def exit_admin_mode(message: Message):
     )
 
     await message.answer(
-        "↩️ Вы вышли из режима администратора. "
-        "Команды обновлены."
+        "↩️ You have exited administrator mode. "
+        "Commands have been updated."
     )
 
 
@@ -617,7 +617,7 @@ async def scanner_command(message: Message):
         message.from_user.id
     ):
         await message.answer(
-            "🚫 Нет прав на использование сканера."
+            "🚫 You do not have permission to use the scanner."
         )
         return
 
@@ -625,7 +625,7 @@ async def scanner_command(message: Message):
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="📷 Открыть сканер",
+                    text="📷 Open Scanner",
                     url=SCAN_WEBAPP_URL,
                 )
             ]
@@ -633,7 +633,7 @@ async def scanner_command(message: Message):
     )
 
     await message.answer(
-        "Сканируйте QR-код участника:",
+        "Scan the attendee's QR code:",
         reply_markup=keyboard,
     )
 
@@ -649,7 +649,7 @@ async def approve_payment(
     callback: CallbackQuery,
 ):
     await callback.answer(
-        "Обрабатываю…",
+        "Processing…",
         show_alert=False,
     )
 
@@ -661,7 +661,7 @@ async def approve_payment(
 
     if not row:
         await callback.message.edit_text(
-            "❌ Запись не найдена."
+            "❌ Record not found."
         )
         return
 
@@ -685,18 +685,18 @@ async def approve_payment(
         chat_id=row["user_id"],
         photo=photo,
         caption=(
-            "🎉 Оплата подтверждена! "
-            "Покажи этот QR на входе\n\n"
-            f"Твой билет №{row_id}\n"
-            f"Тип: {ticket_type}\n"
-            f"Мероприятие: {event_code}\n\n"
-            "До встречи на тусовке 🫶"
+            "🎉 Payment confirmed! "
+            "Show this QR code at the entrance\n\n"
+            f"Your ticket #{row_id}\n"
+            f"Type: {ticket_type}\n"
+            f"Event: {event_code}\n\n"
+            "See you at the event 🫶"
         ),
     )
 
     await callback.message.edit_text(
-        f"✅ Подтверждено. QR по билету #{row_id} "
-        "отправлен пользователю."
+        f"✅ Confirmed. The QR code for ticket #{row_id} "
+        "has been sent to the user."
     )
 
     # Remove the protected review message if it still exists.
@@ -740,7 +740,7 @@ async def reject_payment(
 
     if not row:
         await callback.message.edit_text(
-            "❌ Запись не найдена."
+            "❌ Record not found."
         )
         return
 
@@ -753,19 +753,19 @@ async def reject_payment(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="💳 Оплатить",
+                    text="💳 Pay",
                     url=PAYMENT_LINK,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="✅ Я оплатил",
+                    text="✅ I Have Paid",
                     callback_data=f"paid_row:{row_id}",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="⬅️ Вернуться назад",
+                    text="⬅️ Back",
                     callback_data=f"back_to_menu:{row_id}",
                 )
             ],
@@ -773,7 +773,7 @@ async def reject_payment(
     )
 
     admin_contact_text = (
-        f" или свяжись с администратором: {ADMIN_CONTACT}"
+        f" or contact the administrator: {ADMIN_CONTACT}"
         if ADMIN_CONTACT
         else ""
     )
@@ -781,8 +781,8 @@ async def reject_payment(
     sent = await callback.bot.send_message(
         chat_id=row["user_id"],
         text=(
-            "💔 Упс! Кажется, оплата не прошла\n"
-            "Пожалуйста, проверь правильность платежа"
+            "💔 Oops! It looks like the payment did not go through.\n"
+            "Please check the payment details"
             f"{admin_contact_text}"
         ),
         reply_markup=kb,
@@ -820,8 +820,8 @@ async def reject_payment(
     )
 
     await callback.message.edit_text(
-        f"❌ Оплата по билету #{row_id} отклонена. "
-        "Пользователь уведомлён."
+        f"❌ Payment for ticket #{row_id} was rejected. "
+        "The user has been notified."
     )
 
 
@@ -842,12 +842,12 @@ async def start_clear_db(
         message.from_user.id
     ):
         await message.answer(
-            "🚫 У вас нет прав для этой команды."
+            "🚫 You do not have permission to use this command."
         )
         return
 
     await message.answer(
-        "❗️Введите пароль для очистки базы данных:"
+        "❗️ Enter the password to clear the database:"
     )
 
     await state.set_state(
@@ -869,16 +869,15 @@ async def process_password(
         await clear_database()
 
         await message.answer(
-            "✅ База данных успешно очищена."
+            "✅ Database cleared successfully."
         )
 
     else:
         await message.answer(
-            "❌ Неверный пароль. Доступ запрещён."
+            "❌ Incorrect password. Access denied."
         )
 
     await state.clear()
-
 
 # ============================================================================
 # Event configuration FSM
@@ -911,13 +910,13 @@ async def change_event_menu_cb(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
 
     await callback.message.answer(
-        f"Текущее мероприятие: {config.EVENT_CODE}",
+        f"Current event: {config.EVENT_CODE}",
         reply_markup=_change_event_menu_kb(),
     )
 
@@ -927,13 +926,13 @@ def _change_event_menu_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🔁 Сменить мероприятие",
+                    text="🔁 Change Event",
                     callback_data="change_event",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🛑 Остановить продажи (нет мероприятия)",
+                    text="🛑 Stop Ticket Sales (No Event)",
                     callback_data="event_off",
                 )
             ],
@@ -951,12 +950,12 @@ async def change_event_command(
         message.from_user.id
     ):
         await message.answer(
-            "🚫 У вас нет доступа к панели администратора."
+            "🚫 You do not have access to the admin panel."
         )
         return
 
     await message.answer(
-        f"Текущее мероприятие: {config.EVENT_CODE}",
+        f"Current event: {config.EVENT_CODE}",
         reply_markup=_change_event_menu_kb(),
     )
 
@@ -972,7 +971,7 @@ async def change_event_start(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -987,7 +986,7 @@ async def change_event_start(
     )
 
     await callback.message.answer(
-        "🔒 Введите пароль для смены мероприятия:"
+        "🔒 Enter the password to change the event:"
     )
 
 
@@ -1002,7 +1001,7 @@ async def event_off_start(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -1017,8 +1016,8 @@ async def event_off_start(
     )
 
     await callback.message.answer(
-        "🔒 Введите пароль для отключения продаж "
-        "(нет мероприятия):"
+        "🔒 Enter the password to disable ticket sales "
+        "(no active event):"
     )
 
 
@@ -1040,7 +1039,7 @@ async def change_event_check_password(
         != ADMIN_EVENT_PASSWORD
     ):
         await message.answer(
-            "❌ Неверный пароль. Доступ запрещён."
+            "❌ Incorrect password. Access denied."
         )
         await state.clear()
         return
@@ -1063,9 +1062,9 @@ async def change_event_check_password(
         await state.clear()
 
         await message.answer(
-            "🛑 Продажи остановлены.\n"
-            "Текущее мероприятие: none\n\n"
-            "Покупка билетов пользователям недоступна."
+            "🛑 Ticket sales have been stopped.\n"
+            "Current event: none\n\n"
+            "Ticket purchases are currently unavailable to users."
         )
         return
 
@@ -1074,8 +1073,8 @@ async def change_event_check_password(
     )
 
     await message.answer(
-        "✍️ Введите *название мероприятия* "
-        "(видно пользователям).",
+        "✍️ Enter the *event name* "
+        "(visible to users).",
         parse_mode="Markdown",
     )
 
@@ -1099,8 +1098,8 @@ async def change_event_set_name(
 
     if not title:
         await message.answer(
-            "⚠️ Пустое название. "
-            "Введите ещё раз или /admin для отмены."
+            "⚠️ The event name cannot be empty. "
+            "Enter it again or use /admin to cancel."
         )
         return
 
@@ -1135,10 +1134,10 @@ async def change_event_set_name(
     )
 
     await message.answer(
-        "Введите число — сколько билетов *1+1* "
-        "доступно на это мероприятие?\n"
-        "_0 — отключить 1+1; "
-        "положительное число — разрешить._",
+        "Enter the number of *1+1 tickets* "
+        "available for this event.\n"
+        "_0 — disable 1+1; "
+        "a positive number — enable it._",
         parse_mode="Markdown",
     )
 
@@ -1168,8 +1167,8 @@ async def change_event_set_limit(
 
     except ValueError:
         await message.answer(
-            "⚠️ Введите целое число ≥ 0 "
-            "(например: 0, 3, 10)."
+            "⚠️ Enter an integer ≥ 0 "
+            "(for example: 0, 3, 10)."
         )
         return
 
@@ -1185,8 +1184,8 @@ async def change_event_set_limit(
     )
 
     await message.answer(
-        "✅ Лимит 1+1 сохранён.\n"
-        f"Лимит: {qty}"
+        "✅ 1+1 ticket limit saved.\n"
+        f"Limit: {qty}"
     )
 
     await state.update_data(
@@ -1198,8 +1197,8 @@ async def change_event_set_limit(
     )
 
     await message.answer(
-        "💵 Введите цену для билета *1+1* "
-        "(целое число):",
+        "💵 Enter the price for the *1+1* ticket "
+        "(integer):",
         parse_mode="Markdown",
     )
 
@@ -1221,8 +1220,8 @@ async def change_event_price_1p1(
 
     except ValueError:
         await message.answer(
-            "⚠️ Цена должна быть целым числом ≥ 0. "
-            "Попробуйте ещё раз."
+            "⚠️ The price must be an integer ≥ 0. "
+            "Please try again."
         )
         return
 
@@ -1235,8 +1234,8 @@ async def change_event_price_1p1(
     )
 
     await message.answer(
-        "💵 Введите цену для билета *single* "
-        "(целое число):",
+        "💵 Enter the price for the *single* ticket "
+        "(integer):",
         parse_mode="Markdown",
     )
 
@@ -1258,8 +1257,8 @@ async def change_event_price_single(
 
     except ValueError:
         await message.answer(
-            "⚠️ Цена должна быть целым числом ≥ 0. "
-            "Попробуйте ещё раз."
+            "⚠️ The price must be an integer ≥ 0. "
+            "Please try again."
         )
         return
 
@@ -1272,8 +1271,8 @@ async def change_event_price_single(
     )
 
     await message.answer(
-        "💵 Введите цену для билета *promocode* "
-        "(целое число):",
+        "💵 Enter the price for the *promo code* ticket "
+        "(integer):",
         parse_mode="Markdown",
     )
 
@@ -1295,8 +1294,8 @@ async def change_event_price_promocode(
 
     except ValueError:
         await message.answer(
-            "⚠️ Цена должна быть целым числом ≥ 0. "
-            "Попробуйте ещё раз."
+            "⚠️ The price must be an integer ≥ 0. "
+            "Please try again."
         )
         return
 
@@ -1309,9 +1308,9 @@ async def change_event_price_promocode(
     )
 
     await message.answer(
-        "🧾 Отправьте *список промокодов* через запятую "
-        "(например: VIP10, EARLY, TEST).\n"
-        "Если промокодов нет — отправьте «-».",
+        "🧾 Send the *promo code list* separated by commas "
+        "(for example: VIP10, EARLY, TEST).\n"
+        "If there are no promo codes, send “-”.",
         parse_mode="Markdown",
     )
 
@@ -1408,21 +1407,21 @@ async def change_event_promocodes(
     )
 
     await message.answer(
-        "✅ Мероприятие обновлено!\n"
-        f"Текущее: {new_event}\n\n"
-        f"Лимит 1+1: {limit_qty}\n\n"
-        "Цены:\n"
+        "✅ Event updated!\n"
+        f"Current event: {new_event}\n\n"
+        f"1+1 limit: {limit_qty}\n\n"
+        "Prices:\n"
         f"• 1+1: {prices['1+1']}\n"
         f"• single: {prices['single']}\n"
-        f"• promocode: {prices['promocode']}\n\n"
-        f"Промокоды: {pretty_codes}"
+        f"• promo code: {prices['promocode']}\n\n"
+        f"Promo codes: {pretty_codes}"
     )
 
     # Announce the event when sales change from "none" to an active event.
     if broadcast_needed:
         await message.answer(
-            "📣 Сначала рассылаю последний пост канала, "
-            "затем уведомление с кнопкой…"
+            "📣 Sending the latest channel post first, "
+            "then the event notification with a button…"
         )
 
         asyncio.create_task(
@@ -1444,7 +1443,7 @@ async def list_1plus1_wishers(
         message.from_user.id
     ):
         await message.answer(
-            "🚫 У вас нет прав для этой команды."
+            "🚫 You do not have permission to use this command."
         )
         return
 
@@ -1515,8 +1514,8 @@ async def _expire_payment_after_admin(
 
         await bot.send_message(
             chat_id,
-            "⏰ Время оплаты истекло.\n"
-            "Выберите тип билета заново:",
+            "⏰ Payment time has expired.\n"
+            "Please choose a ticket type again:",
             reply_markup=kb,
         )
 
@@ -1548,7 +1547,7 @@ async def _broadcast_new_event(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Подписаться на Telegram",
+                    text="✅ Follow on Telegram",
                     url=(
                         f"https://t.me/"
                         f"{CHANNEL_ID.lstrip('@')}"
@@ -1557,13 +1556,13 @@ async def _broadcast_new_event(
             ],
             [
                 InlineKeyboardButton(
-                    text="📷 Подписаться на Instagram",
+                    text="📷 Follow on Instagram",
                     url=INSTAGRAM_LINK,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🎟 Оплатить билет",
+                    text="🎟 Buy a Ticket",
                     callback_data="buy_ticket_menu",
                 )
             ],
@@ -1571,8 +1570,8 @@ async def _broadcast_new_event(
     )
 
     text = (
-        f"🔥 Новое мероприятие: {event_title}\n\n"
-        "Билеты уже доступны — не забудь купить👇"
+        f"🔥 New event: {event_title}\n\n"
+        "Tickets are now available — don't forget to get yours 👇"
     )
 
     # Throttle broadcasts to roughly 20 messages per second.
@@ -1609,7 +1608,7 @@ async def _broadcast_last_post_then_notice(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🎟 Оплатить билет",
+                    text="🎟 Buy a Ticket",
                     callback_data="buy_ticket_menu",
                 )
             ]
@@ -1620,7 +1619,7 @@ async def _broadcast_last_post_then_notice(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="✅ Подписаться на Telegram",
+                    text="✅ Follow on Telegram",
                     url=(
                         f"https://t.me/"
                         f"{CHANNEL_ID.lstrip('@')}"
@@ -1629,13 +1628,13 @@ async def _broadcast_last_post_then_notice(
             ],
             [
                 InlineKeyboardButton(
-                    text="📷 Подписаться на Instagram",
+                    text="📷 Follow on Instagram",
                     url=INSTAGRAM_LINK,
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="🎟 Оплатить билет",
+                    text="🎟 Buy a Ticket",
                     callback_data="buy_ticket_menu",
                 )
             ],
@@ -1689,8 +1688,8 @@ async def _broadcast_last_post_then_notice(
             await bot.send_message(
                 uid,
                 (
-                    f"🔥 Новое мероприятие: {event_title}\n\n"
-                    "Билеты уже доступны — жми ниже 👇"
+                    f"🔥 New event: {event_title}\n\n"
+                    "Tickets are now available — tap below 👇"
                 ),
                 reply_markup=kb,
             )
@@ -1733,7 +1732,7 @@ async def broadcast_last_check_password(
 
     if not pwd_ok:
         await message.answer(
-            "❌ Неверный пароль. Рассылка отменена."
+            "❌ Incorrect password. Broadcast cancelled."
         )
         await state.clear()
         return
@@ -1741,7 +1740,7 @@ async def broadcast_last_check_password(
     await state.clear()
 
     await message.answer(
-        "✅ Пароль принят. Начинаю рассылку…"
+        "✅ Password accepted. Starting broadcast…"
     )
 
     await _broadcast_last_post(
@@ -1795,10 +1794,10 @@ async def _broadcast_last_post(
 
     if not post_id:
         await reply_target.answer(
-            "⚠️ Я ещё не видел постов канала. "
-            "Опубликуйте новый пост "
-            "(бот должен быть админом канала), "
-            "затем попробуйте снова."
+            "⚠️ I haven't received any channel posts yet. "
+            "Publish a new post "
+            "(the bot must be a channel administrator), "
+            "then try again."
         )
         return
 
@@ -1806,7 +1805,7 @@ async def _broadcast_last_post(
 
     if not subs:
         await reply_target.answer(
-            "Сейчас нет подписчиков для рассылки."
+            "There are currently no subscribers to broadcast to."
         )
         return
 
@@ -1827,8 +1826,8 @@ async def _broadcast_last_post(
             skipped += 1
 
     await reply_target.answer(
-        f"📣 Готово. Отправлено: {sent}, "
-        f"пропущено: {skipped}."
+        f"📣 Done. Sent: {sent}, "
+        f"skipped: {skipped}."
     )
 
 
@@ -1849,8 +1848,8 @@ async def broadcast_last_cmd(
     )
 
     await message.answer(
-        "🔒 Введите пароль для рассылки "
-        "последнего поста канала:"
+        "🔒 Enter the password to broadcast "
+        "the latest channel post:"
     )
 
 
@@ -1865,7 +1864,7 @@ async def broadcast_last_cb(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -1875,8 +1874,8 @@ async def broadcast_last_cb(
     )
 
     await callback.message.answer(
-        "🔒 Введите пароль для рассылки "
-        "последнего поста канала:"
+        "🔒 Enter the password to broadcast "
+        "the latest channel post:"
     )
 
 
@@ -1889,7 +1888,7 @@ def _scan_cancel_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="❌ Отмена",
+                    text="❌ Cancel",
                     callback_data="scan_access_cancel",
                 )
             ]
@@ -1907,23 +1906,23 @@ def _scan_menu_kb() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="👥 Посмотреть админов",
+                    text="👥 View Scanner Admins",
                     callback_data="scan_access_view",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="➕ Добавить",
+                    text="➕ Add",
                     callback_data="scan_access_add",
                 ),
                 InlineKeyboardButton(
-                    text="➖ Убрать",
+                    text="➖ Remove",
                     callback_data="scan_access_remove",
                 ),
             ],
             [
                 InlineKeyboardButton(
-                    text="✖️ Закрыть",
+                    text="✖️ Close",
                     callback_data="scan_access_close",
                 )
             ],
@@ -1941,13 +1940,13 @@ async def scan_access_menu(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
 
     await callback.message.answer(
-        "🔐 Управление доступом к сканеру:",
+        "🔐 Scanner access management:",
         reply_markup=_scan_menu_kb(),
     )
 
@@ -1962,7 +1961,7 @@ async def scan_access_view(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -1972,11 +1971,11 @@ async def scan_access_view(
     )
 
     if not ids:
-        text = "Сканер-админов нет."
+        text = "There are no scanner administrators."
 
     else:
         lines = [
-            "👥 Сканер-админы:"
+            "👥 Scanner administrators:"
         ]
 
         for uid in sorted(ids):
@@ -2003,7 +2002,7 @@ async def scan_access_cancel(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -2011,15 +2010,13 @@ async def scan_access_cancel(
     await state.clear()
 
     await callback.answer(
-        "Отменено"
+        "Cancelled"
     )
 
     await callback.message.answer(
-        "🔐 Управление доступом к сканеру:",
+        "🔐 Scanner access management:",
         reply_markup=_scan_menu_kb(),
     )
-
-
 @router.callback_query(
     F.data == "scan_access_add"
 )
@@ -2031,7 +2028,7 @@ async def scan_access_add(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -2041,8 +2038,8 @@ async def scan_access_add(
     )
 
     await callback.message.answer(
-        "Отправьте числовой user_id, "
-        "которому выдать доступ к сканеру.",
+        "Send the numeric user_id that should "
+        "receive scanner access.",
         reply_markup=_scan_cancel_kb(),
     )
 
@@ -2067,8 +2064,8 @@ async def scan_access_add_id(
 
     except ValueError:
         await message.answer(
-            "user_id должен быть числом. "
-            "Попробуйте снова или нажмите «Отмена».",
+            "user_id must be a number. "
+            "Try again or tap “Cancel”.",
             reply_markup=_scan_cancel_kb(),
         )
         return
@@ -2078,7 +2075,7 @@ async def scan_access_add_id(
         or await has_role(uid, "scanner")
     ):
         await message.answer(
-            "✅ У пользователя уже есть доступ к сканеру."
+            "✅ This user already has scanner access."
         )
 
     else:
@@ -2088,13 +2085,13 @@ async def scan_access_add_id(
         )
 
         await message.answer(
-            f"✅ Выдан доступ к сканеру: {uid}"
+            f"✅ Scanner access granted to: {uid}"
         )
 
     await state.clear()
 
     await message.answer(
-        "Готово. Вернуться в меню управления:",
+        "Done. Return to the access management menu:",
         reply_markup=_scan_menu_kb(),
     )
 
@@ -2110,7 +2107,7 @@ async def scan_access_remove(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
@@ -2120,8 +2117,8 @@ async def scan_access_remove(
     )
 
     await callback.message.answer(
-        "Отправьте числовой user_id, "
-        "у которого нужно забрать доступ.",
+        "Send the numeric user_id whose "
+        "scanner access should be revoked.",
         reply_markup=_scan_cancel_kb(),
     )
 
@@ -2146,16 +2143,16 @@ async def scan_access_remove_id(
 
     except ValueError:
         await message.answer(
-            "user_id должен быть числом. "
-            "Попробуйте снова или нажмите «Отмена».",
+            "user_id must be a number. "
+            "Try again or tap “Cancel”.",
             reply_markup=_scan_cancel_kb(),
         )
         return
 
     if await has_role(uid, "admin"):
         await message.answer(
-            "🚫 Нельзя отозвать доступ у полного админа "
-            "(роль 'admin')."
+            "🚫 Scanner access cannot be revoked from a full administrator "
+            "(role 'admin')."
         )
 
     elif not await has_role(
@@ -2163,7 +2160,7 @@ async def scan_access_remove_id(
         "scanner",
     ):
         await message.answer(
-            "ℹ️ У пользователя и так нет прав сканера."
+            "ℹ️ This user does not currently have scanner access."
         )
 
     else:
@@ -2173,13 +2170,13 @@ async def scan_access_remove_id(
         )
 
         await message.answer(
-            f"✅ Доступ к сканеру отозван: {uid}"
+            f"✅ Scanner access revoked from: {uid}"
         )
 
     await state.clear()
 
     await message.answer(
-        "Готово. Вернуться в меню управления:",
+        "Done. Return to the access management menu:",
         reply_markup=_scan_menu_kb(),
     )
 
@@ -2194,13 +2191,13 @@ async def scan_access_close(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
 
     await callback.message.answer(
-        "Закрыто."
+        "Closed."
     )
 
 
@@ -2214,12 +2211,12 @@ async def scan_access_menu_cmd(
         message.from_user.id
     ):
         await message.answer(
-            "Нет прав."
+            "Access denied."
         )
         return
 
     await message.answer(
-        "🔐 Управление доступом к сканеру:",
+        "🔐 Scanner access management:",
         reply_markup=_scan_menu_kb(),
     )
 
@@ -2242,7 +2239,7 @@ async def _purchase_menu_kb() -> InlineKeyboardMarkup:
         rows.append(
             [
                 InlineKeyboardButton(
-                    text="🎫 Билет 1+1",
+                    text="🎫 1+1 Ticket",
                     callback_data="ticket_1plus1",
                 )
             ]
@@ -2251,7 +2248,7 @@ async def _purchase_menu_kb() -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(
-                text="🎫 1 билет",
+                text="🎫 Single Ticket",
                 callback_data="ticket_single",
             )
         ]
@@ -2260,7 +2257,7 @@ async def _purchase_menu_kb() -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(
-                text="🎟 У меня есть промокод",
+                text="🎟 I Have a Promo Code",
                 callback_data="ticket_promocode",
             )
         ]
@@ -2269,7 +2266,7 @@ async def _purchase_menu_kb() -> InlineKeyboardMarkup:
     rows.append(
         [
             InlineKeyboardButton(
-                text="⬅️ Вернуться назад",
+                text="⬅️ Back",
                 callback_data="back:start",
             )
         ]
@@ -2306,13 +2303,13 @@ async def _notify_wishers_1p1_available(
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🎟 Оплатить билет",
+                    text="🎟 Buy a Ticket",
                     callback_data="ticket_1plus1",
                 )
             ],
             [
                 InlineKeyboardButton(
-                    text="⬅️ Вернуться назад",
+                    text="⬅️ Back",
                     callback_data="back:ticket",
                 )
             ],
@@ -2330,8 +2327,8 @@ async def _notify_wishers_1p1_available(
             await bot.send_message(
                 uid,
                 (
-                    f"✨ Освободились билеты 1+1 "
-                    f"на «{event_code}». Успей забрать 👇"
+                    f"✨ 1+1 tickets are available again "
+                    f"for “{event_code}”. Get yours while they last 👇"
                 ),
                 reply_markup=kb,
             )
@@ -2424,7 +2421,7 @@ def _parse_prices(
     for part in parts:
         if ":" not in part:
             raise ValueError(
-                f"Нет двоеточия: «{part}»"
+                f"Missing colon: “{part}”"
             )
 
         key, value = part.split(
@@ -2443,7 +2440,7 @@ def _parse_prices(
 
         if not value.isdigit():
             raise ValueError(
-                f"Цена должна быть числом: «{part}»"
+                f"Price must be a number: “{part}”"
             )
 
         prices[key] = int(value)
@@ -2647,13 +2644,13 @@ async def cb_an_revenue(
         callback.from_user.id
     ):
         await callback.answer(
-            "Нет прав.",
+            "Access denied.",
             show_alert=True,
         )
         return
 
     await callback.answer(
-        "Считаю…",
+        "Calculating…",
         show_alert=False,
     )
 
@@ -2670,7 +2667,7 @@ async def cb_an_revenue(
     )
 
     lines = [
-        "💰 Выручка"
+        "💰 Revenue"
     ]
 
     if (
@@ -2678,30 +2675,30 @@ async def cb_an_revenue(
         and current_event.strip().lower() != "none"
     ):
         line = (
-            f"Текущее мероприятие «{current_event}»: "
+            f"Current event “{current_event}”: "
             f"{_fmt_amount(current_total)} ₽"
         )
 
         if current_missing:
             line += (
-                f" (без цены: {current_missing})"
+                f" (missing price: {current_missing})"
             )
 
         lines.append(line)
 
     else:
         lines.append(
-            "Текущее мероприятие: none (0 ₽)"
+            "Current event: none (0 ₽)"
         )
 
     line = (
-        f"Все мероприятия: "
+        f"All events: "
         f"{_fmt_amount(all_total)} ₽"
     )
 
     if all_missing:
         line += (
-            f" (без цены: {all_missing})"
+            f" (missing price: {all_missing})"
         )
 
     lines.append(line)
@@ -2760,11 +2757,11 @@ async def _send_report_to(
     await bot.send_message(
         chat_id,
         (
-            "📊 Статистика:\n"
-            f"👥 Подписчиков в канале: {chat_count}\n"
-            f"👤 Создано покупок: {total}\n"
-            f"💰 Оплачено: {paid_count}\n"
-            f"✅ Пришли: {active}"
+            "📊 Statistics:\n"
+            f"👥 Channel subscribers: {chat_count}\n"
+            f"👤 Purchases created: {total}\n"
+            f"💰 Paid: {paid_count}\n"
+            f"✅ Attended: {active}"
         ),
     )
 
@@ -2784,8 +2781,8 @@ async def _send_stats_this_to(
         await bot.send_message(
             chat_id,
             (
-                f"Для «{event_code}» "
-                "оплаченных билетов нет."
+                f"There are no paid tickets "
+                f"for “{event_code}”."
             ),
         )
         return
@@ -2796,7 +2793,7 @@ async def _send_stats_this_to(
     )
 
     parts = [
-        f"📊 «{event_code}»: только оплаченные",
+        f"📊 “{event_code}”: paid tickets only",
         "",
     ]
 
@@ -2808,7 +2805,7 @@ async def _send_stats_this_to(
 
     parts.append("")
     parts.append(
-        f"ИТОГО: {total}"
+        f"TOTAL: {total}"
     )
 
     await bot.send_message(
@@ -2829,15 +2826,15 @@ async def _send_wishers_to(
         await bot.send_message(
             chat_id,
             (
-                "Пока никто не пытался купить 1+1 "
-                "после исчерпания лимита."
+                "No one has tried to buy a 1+1 ticket "
+                "after the limit was reached yet."
             ),
         )
         return
 
     lines = [
-        "📝 Кто хотел 1+1, но не успел "
-        "(уникальные пользователи):\n"
+        "📝 Users who wanted a 1+1 ticket but missed out "
+        "(unique users):\n"
     ]
 
     for row in rows:
@@ -2871,7 +2868,7 @@ async def _send_wishers_to(
         await bot.send_document(
             chat_id,
             FSInputFile(filename),
-            caption="📝 Список желающих 1+1",
+            caption="📝 1+1 Waiting List",
         )
 
     else:
@@ -2895,7 +2892,7 @@ async def _send_export_to(
     if not rows:
         await bot.send_message(
             chat_id,
-            "Данных нет.",
+            "No data available.",
         )
         return
 
@@ -2942,9 +2939,9 @@ async def _send_export_to(
     )
 
     caption = (
-        f"📄 Выгрузка базы users — {config.EVENT_CODE}"
+        f"📄 Users database export — {config.EVENT_CODE}"
         if only_this
-        else "📄 Выгрузка базы users (все мероприятия)"
+        else "📄 Users database export (all events)"
     )
 
     await bot.send_document(
