@@ -19,13 +19,13 @@ from aiogram.types import (
 )
 from qr_generator import generate_qr
 from database import (
-   # Ticket operations by row ID
+    # работа по row_id
     get_row, get_paid_status_by_id, set_paid_status_by_id,
     get_status_by_id, update_status_by_id, get_status, update_status,
-   # Reports and lists
+    # отчёты / списки
     count_registered, count_activated, count_paid,
     get_registered_users, get_paid_users,
-   # Maintenance and shared helpers
+    # обслуживание
     clear_database, get_unique_one_plus_one_attempters_for_event,
     get_all_subscribers, set_meta, get_meta, get_all_recipient_ids,
     set_one_plus_one_limit, get_one_plus_one_limit,
@@ -42,19 +42,19 @@ async def is_full_admin(uid: int) -> bool:
     return await has_role(uid, "admin")
 
 async def _can_use_scanner(uid: int) -> bool:
-   # Scanner access is available to scanner admins and full admins.
+    # сканер-доступ у сканер-админов и у полноценных админов
     return await has_role(uid, "admin") or await has_role(uid, "scanner")
 
 
 # =========================
-# /admin — admin panel
+# /admin — панель
 # =========================
 @router.message(lambda msg: msg.text == "/admin")
 async def admin_panel(message: Message):
     uid = message.from_user.id
 
     if await is_full_admin(uid):
-       # Configure commands for full administrators.
+        # Группы команд для полноценных админов
         await message.bot.set_my_commands(
             [
                 BotCommand(command="analytics", description="📊 Аналитическая сводка мероприятия"),
@@ -68,7 +68,7 @@ async def admin_panel(message: Message):
         return
 
     elif await _can_use_scanner(uid):
-       # Configure scanner-only access.
+        # Только сканер-доступ
         await message.bot.set_my_commands(
             [
                 BotCommand(command="scanner", description="📷 Открыть сканер"),
@@ -92,7 +92,7 @@ def _kb_analytics() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📊 Статистика", callback_data="an:report")],
         [InlineKeyboardButton(text="📊 Проданные билеты (текущее)", callback_data="an:stats_this")],
         [InlineKeyboardButton(text="📝 Кто хотел 1+1", callback_data="an:wishers")],
-        [InlineKeyboardButton(text="💰 Выручка", callback_data="an:revenue")],   
+        [InlineKeyboardButton(text="💰 Выручка", callback_data="an:revenue")],   # ← добавили
         [InlineKeyboardButton(text="📤 Выгрузить (текущее)", callback_data="an:export_this")],
         [InlineKeyboardButton(text="📤 Выгрузить (все)", callback_data="an:export_all")],
     ])
@@ -178,8 +178,8 @@ async def cb_adm_clear_db(callback: CallbackQuery, state: FSMContext):
 
 
 # =========================
-# WebApp scanner handling
-# Supports legacy user IDs and current row-based QR payloads.
+# Сканирование через WebApp
+# Ожидаем payload вида "row_id:ticket_type"
 # =========================
 @router.message(lambda msg: msg.web_app_data is not None)
 async def handle_webapp_data(message: Message):
@@ -191,7 +191,7 @@ async def handle_webapp_data(message: Message):
         await message.answer("⚠️ Пустые данные из сканера.")
         return
 
-   # Legacy format: the payload contains a plain user ID.
+    # 1) Старый формат (как раньше): в payload чистое число (user_id)
     if payload.isdigit():
         user_id = int(payload)
         status = await get_status(user_id)
@@ -204,7 +204,7 @@ async def handle_webapp_data(message: Message):
             await message.answer("⚠️ Этот QR-код уже был использован.")
         return
 
-   # Current-compatible formats: R:<row_id>, QR:<...>, or <row_id>:<suffix>.
+    # 2) Совместимость с новым форматом: R:<row_id>, QR:<...>, <row_id>:что-угодно
     p = payload.lstrip()
     if p.lower().startswith("qr:"):
         p = p[3:].lstrip()
@@ -218,7 +218,7 @@ async def handle_webapp_data(message: Message):
         await message.answer("⚠️ Неверный формат QR.")
         return
 
-   # Preserve compatibility by trying the value as a legacy user ID first.
+    # Сначала попробуем, как раньше, трактовать число как user_id (если сканер всё ещё шлёт user_id с префиксом)
     status = await get_status(candidate)
     if status is not None:
         if status == "не активирован":
@@ -228,7 +228,7 @@ async def handle_webapp_data(message: Message):
             await message.answer("⚠️ Этот QR-код уже был использован.")
         return
 
-   # Otherwise treat the value as a row ID (one purchase per row).
+    # Иначе это row_id — новая схема (одна покупка = одна строка)
     row = await get_row(candidate)
     if row is None:
         await message.answer("❌ QR-код не найден.")
@@ -242,7 +242,7 @@ async def handle_webapp_data(message: Message):
         await message.answer("⚠️ Этот QR-код уже был использован.")
 
 # =========================
-# /report — statistics
+# /report — статистика
 # =========================
 @router.message(lambda msg: msg.text == "/report")
 async def report(message: Message):
@@ -252,8 +252,8 @@ async def report(message: Message):
     await _send_report_to(message.bot, message.chat.id)
 
 # =========================
-# /export_users — export all purchases to Excel
-# /export_users_this — export purchases for the current event
+# /export_users — выгрузить ВСЕ покупки в Excel
+# /export_users_this — выгрузить покупки ТЕКУЩЕГО мероприятия
 # =========================
 async def export_users_excel(message: Message):
     if not await is_full_admin(message.from_user.id):
@@ -262,11 +262,11 @@ async def export_users_excel(message: Message):
     await _send_export_to(message.bot, message.chat.id, only_this=(message.text == "/export_users_this"))
         
 # =========================
-# /stats — paid ticket statistics
-# /stats_all — paid and pending-review statistics
+# /stats — витрина продаж (только оплаченные)
+# /stats_all — оплаченные + на проверке
 # =========================
 
-# Statistics for the active event from config.EVENT_CODE.
+# По текущему мероприятию из config.EVENT_CODE
 @router.message(lambda m: m.text == "/stats_this")
 async def ticket_stats_this(message: Message):
     if not await is_full_admin(message.from_user.id):
@@ -276,25 +276,25 @@ async def ticket_stats_this(message: Message):
 
 
 # =========================
-# /exit_admin — leave admin mode
+# /exit_admin — выйти из режима админа
 # =========================
 @router.message(lambda msg: msg.text == "/exit_admin")
 async def exit_admin_mode(message: Message):
     uid = message.from_user.id
 
-   # Reset chat-specific commands.
+    # Сбрасываем команды для этого чата
     try:
         await message.bot.delete_my_commands(scope=BotCommandScopeChat(chat_id=uid))
     except Exception:
         pass
 
-   # Base commands are available to all users.
+    # Базовые команды доступны всем
     cmds = [
         BotCommand(command="start", description="Начать"),
         BotCommand(command="help", description="ℹ️ Помощь / Связь с админом"),
     ]
 
-   # Show the admin command only to full admins or scanner admins.
+    # «Админ»-кнопку даём только супер-админу или сканер-админу
     if await is_full_admin(uid) or await _can_use_scanner(uid):
         cmds.append(BotCommand(command="admin", description="🛡 Режим администратора"))
 
@@ -303,7 +303,7 @@ async def exit_admin_mode(message: Message):
 
     
 # =========================
-# /scanner — open the web scanner
+# /scanner — открыть веб-сканер
 # =========================
 @router.message(lambda msg: msg.text == "/scanner")
 async def scanner_command(message: Message):
@@ -318,7 +318,7 @@ async def scanner_command(message: Message):
 
     
 # =========================
-# Payment approval by row ID
+# Подтверждение оплаты по row_id
 # =========================
 @router.callback_query(F.data.startswith("approve_row:"))
 async def approve_payment(callback: CallbackQuery):
@@ -330,11 +330,11 @@ async def approve_payment(callback: CallbackQuery):
         await callback.message.edit_text("❌ Запись не найдена.")
         return
 
-   # Mark the payment as approved and generate the QR ticket.
+    # ставим оплату и генерим QR
     await set_paid_status_by_id(row_id, "оплатил")
 
     ticket_type = row["ticket_type"]
-    event_code = row["event_code"] or "-"   
+    event_code = row["event_code"] or "-"   # <-- вместо row.get(...)
 
     png_bytes = await generate_qr(row_id)
     photo = BufferedInputFile(png_bytes, filename=f"ticket_{row_id}.png")
@@ -353,7 +353,7 @@ async def approve_payment(callback: CallbackQuery):
 
     await callback.message.edit_text(f"✅ Подтверждено. QR по билету #{row_id} отправлен пользователю.")
     
-   # Remove the protected review message if it still exists.
+    # Снимем «защиту» и удалим экран ожидания, если он ещё висит
     uid = row["user_id"]
     protected_id_raw = await get_meta(f"review_msg:{uid}")
     if protected_id_raw:
@@ -361,11 +361,11 @@ async def approve_payment(callback: CallbackQuery):
             await callback.bot.delete_message(uid, int(protected_id_raw))
         except Exception:
             pass
-# Clear the review-message metadata after removing protection.
+# очистим мету (сигнал, что защита снята)
     await set_meta(f"review_msg:{uid}", "")
     
 # =========================
-# Payment rejection by row ID
+# Отклонение оплаты по row_id
 # =========================
 @router.callback_query(F.data.startswith("reject_row:"))
 async def reject_payment(callback: CallbackQuery):
@@ -408,14 +408,14 @@ async def reject_payment(callback: CallbackQuery):
             pass
     await set_meta(f"review_msg:{uid}", "")
     
-   # Start a new five-minute payment timer after rejection.
+    # ⏱️ Запускаем новый 5-минутный таймер после отклонения
     asyncio.create_task(
         _expire_payment_after_admin(
             bot=callback.bot,
             chat_id=row["user_id"],
             message_id=sent.message_id,
             row_id=row_id,
-            timeout_sec=300  # five minutes
+            timeout_sec=300  # 5 минут
         )
     )
     
@@ -424,7 +424,7 @@ async def reject_payment(callback: CallbackQuery):
 
 
 # =========================
-# Database cleanup with password confirmation
+# Очистка базы (с паролем)
 # =========================
 class ClearDBStates(StatesGroup):
     waiting_for_password = State()
@@ -440,6 +440,7 @@ async def start_clear_db(message: Message, state: FSMContext):
 
 @router.message(ClearDBStates.waiting_for_password)
 async def process_password(message: Message, state: FSMContext):
+    from config import ADMIN_EVENT_PASSWORD
     if (message.text or "").strip() == (ADMIN_EVENT_PASSWORD or ""):
         await clear_database()
         await message.answer("✅ База данных успешно очищена.")
@@ -448,20 +449,20 @@ async def process_password(message: Message, state: FSMContext):
     await state.clear()
 
 # =========================
-# FSM for event configuration
+# FSM для смены мероприятия
 # =========================
 
 class ChangeEventStates(StatesGroup):
     waiting_for_password = State()
     waiting_for_event_name = State()
-    waiting_for_1p1_limit = State()   
+    waiting_for_1p1_limit = State()   # <— новое состояние
     waiting_for_price_1p1 = State()
     waiting_for_price_single = State()
     waiting_for_price_promocode = State()
     waiting_for_promocode_list = State()
     
 def _normalize_event_name(raw: str) -> str:
-   # Normalize whitespace in the event name.
+    # Прибираем лишние пробелы, убираем перевод строки по краям
     return " ".join((raw or "").strip().split())
 
 
@@ -498,7 +499,7 @@ async def change_event_start(callback: CallbackQuery, state: FSMContext):
     if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
-    await state.update_data(_mode="change")  # Mode: switch to a new event.
+    await state.update_data(_mode="change")  # режим: смена на новое название
     await state.set_state(ChangeEventStates.waiting_for_password)
     await callback.message.answer("🔒 Введите пароль для смены мероприятия:")
 
@@ -507,7 +508,7 @@ async def event_off_start(callback: CallbackQuery, state: FSMContext):
     if not await is_full_admin(callback.from_user.id):
         await callback.answer("Нет прав.", show_alert=True)
         return
-    await state.update_data(_mode="off")  # Mode: disable ticket sales (EVENT_CODE="none").
+    await state.update_data(_mode="off")  # режим: выключить продажи (EVENT_CODE="none")
     await state.set_state(ChangeEventStates.waiting_for_password)
     await callback.message.answer("🔒 Введите пароль для отключения продаж (нет мероприятия):")
 
@@ -525,7 +526,7 @@ async def change_event_check_password(message: Message, state: FSMContext):
     data = await state.get_data()
     mode = data.get("_mode", "change")
 
-   # Disable ticket sales by setting EVENT_CODE to "none".
+    # Режим: выключить продажи — просто ставим EVENT_CODE = "none"
     if mode == "off":
         config.EVENT_CODE = "none"
         await set_meta("active_event_code", "none")
@@ -537,7 +538,7 @@ async def change_event_check_password(message: Message, state: FSMContext):
         )
         return
 
-   # Continue with a new event name.
+    # Режим: сменить на новое название
     await state.set_state(ChangeEventStates.waiting_for_event_name)
     await message.answer("✍️ Введите *название мероприятия* (видно пользователям).", parse_mode="Markdown")
 
@@ -556,17 +557,17 @@ async def change_event_set_name(message: Message, state: FSMContext):
     old = (config.EVENT_CODE or "").strip().lower()
     new = (title or "").strip()
 
-   # Update the active event in memory and persist it across restarts.
+    # Update the active event in memory and persist it across restarts.
     config.EVENT_CODE = new
     await set_meta("active_event_code", new)
 
-   # Remember whether a new-event broadcast is required.
+    # Сохраним во FSM, нужно ли потом делать рассылку
     await state.update_data(
         _broadcast_needed=(old == "none" and new.strip().lower() != "none"),
         _new_event_code=new
     )
 
-   # Continue to the 1+1 ticket limit.
+    # Переходим к вводу лимита 1+1
     await state.set_state(ChangeEventStates.waiting_for_1p1_limit)
     await message.answer(
         "Введите число — сколько билетов *1+1* доступно на это мероприятие?\n"
@@ -589,12 +590,12 @@ async def change_event_set_limit(message: Message, state: FSMContext):
         await message.answer("⚠️ Введите целое число ≥ 0 (например: 0, 3, 10).")
         return
 
-   # Save the 1+1 limit for the active event.
+    # Сохраняем лимит для текущего мероприятия
     await set_one_plus_one_limit(config.EVENT_CODE, qty)
     used = await count_one_plus_one_taken(config.EVENT_CODE)
     left = max(qty - used, 0)
 
-   # Confirm the limit and continue to price configuration.
+    # Короткий фидбек и переходим к ценам
     await message.answer(
         "✅ Лимит 1+1 сохранён.\n"
         f"Лимит: {qty}"
@@ -663,31 +664,31 @@ async def change_event_promocodes(message: Message, state: FSMContext):
     else:
         codes = [c.strip().upper() for c in raw.split(",") if c.strip()]
 
-   # Collect ticket prices.
+    # Соберём цены
     prices = {
         "1+1": int(data.get("price_1p1", 0)),
         "single": int(data.get("price_single", 0)),
         "promocode": int(data.get("price_promocode", 0)),
     }
 
-   # Store event-specific configuration in bot_meta.
-   # Keys: prices:<EVENT_CODE> and promocodes:<EVENT_CODE>.
+    # Сохраняем в bot_meta (per-event)
+    # ключи: prices:<EVENT_CODE> и promocodes:<EVENT_CODE>
     try:
         await set_meta(f"prices:{new_event}", json.dumps(prices, ensure_ascii=False))
         await set_meta(f"promocodes:{new_event}", json.dumps(codes, ensure_ascii=False))
     except Exception:
-       # Keep the admin flow alive if metadata persistence fails.
+        # не падаем в случае мелких проблем БД
         pass
 
     limit_qty = int(data.get("_limit_qty", 0))
     used = await count_one_plus_one_taken(new_event)
     left = max(limit_qty - used, 0)
 
-   # Read the remaining FSM values before clearing the state.
+    # подчистим FSM
     broadcast_needed = bool(data.get("_broadcast_needed"))
     await state.clear()
 
-   # Send the final event configuration summary.
+    # Итог
     pretty_codes = (", ".join(codes) if codes else "—")
     await message.answer(
         "✅ Мероприятие обновлено!\n"
@@ -700,13 +701,13 @@ async def change_event_promocodes(message: Message, state: FSMContext):
         f"Промокоды: {pretty_codes}"
     )
 
-   # Announce the event when sales change from "none" to an active event.
+    # Если раньше было none → стало не none — шлём анонс (как раньше)
     if broadcast_needed:
         await message.answer("📣 Сначала рассылаю последний пост канала, затем уведомление с кнопкой…")
         asyncio.create_task(_broadcast_last_post_then_notice(message.bot, new_event))
 
 # =========================
-# 1+1 waiting-list helpers
+# Счётчик желающих 1+1
 # =========================
 
 async def list_1plus1_wishers(message: Message):
@@ -717,13 +718,13 @@ async def list_1plus1_wishers(message: Message):
 
 
 # =========================
-# Local payment-expiration helper
+# Локальный хелпер таймера
 # =========================
 
 async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id: int, timeout_sec: int = 300):
     await asyncio.sleep(timeout_sec)
 
-   # Keep the ticket type and event for possible 1+1 notifications.
+    # узнаем тип билета и событие (важно для 1+1)
     row = await get_row(row_id)
     ticket_type = (row["ticket_type"] or "").strip().lower() if row else ""
     event_code = row["event_code"] if row else None
@@ -731,7 +732,7 @@ async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id
     status = await get_paid_status_by_id(row_id)
 
     if status in ("не оплатил", "отклонено"):
-               # Reset a rejected payment to "не оплатил" after the retry window expires.
+                # если было «отклонено», переводим в «не оплатил»
         if status == "отклонено":
             try:
                 await set_paid_status_by_id(row_id, "не оплатил")
@@ -750,13 +751,13 @@ async def _expire_payment_after_admin(bot, chat_id: int, message_id: int, row_id
             reply_markup=kb
         )
         
-       # Notify waiting users if a 1+1 slot becomes available.
+        # если освободился слот 1+1 — предупредим желающих
         if ticket_type == "1+1" and event_code:
             await _notify_wishers_1p1_available(bot, event_code)
 
 
 # =========================
-# Broadcast helpers
+# Хелпер для рассылки:
 # =========================
 
 async def _broadcast_new_event(bot, event_title: str):
@@ -772,22 +773,22 @@ async def _broadcast_new_event(bot, event_title: str):
         f"🔥 Новое мероприятие: {event_title}\n\n"
         "Билеты уже доступны — не забудь купить👇"
     )
-   # Throttle broadcasts to roughly 20 messages per second.
+    # Telegram: не чаще ~30 сообщений/сек. Пойдём мягко — 20/сек.
     for uid, _uname in subs:
         try:
             await bot.send_message(uid, text, reply_markup=kb)
             await asyncio.sleep(0.05)
         except Exception:
-           # Ignore delivery failures such as users blocking the bot.
+            # игнорируем блокировки и пр.
             await asyncio.sleep(0.05)
 
 async def _broadcast_last_post_then_notice(bot, event_title: str):
-    post_id = await get_meta(LAST_POST_KEY)  # If no post is stored, send only the event notification.
+    post_id = await get_meta(LAST_POST_KEY)  # может быть None, тогда просто шлём уведомление
     subs = await get_all_subscribers()
     if not subs:
         return
 
-   # Build keyboards for subscribed and unsubscribed users.
+    # Клавиатуры
     kb_notice_subscribed = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🎟 Оплатить билет", callback_data="buy_ticket_menu")]
     ])
@@ -798,26 +799,26 @@ async def _broadcast_last_post_then_notice(bot, event_title: str):
     ])
 
     for uid, _uname in subs:
-       # Copy the latest channel post when available.
+        # 1) копируем последний пост (если известен)
         if post_id:
             try:
                 await bot.copy_message(chat_id=uid, from_chat_id=CHANNEL_ID, message_id=int(post_id))
             except Exception:
-                pass  # Ignore recipients for whom the post cannot be delivered.
+                pass  # игнорируем тех, к кому не доставили
 
-       # Check whether the recipient is subscribed to the channel.
+        # 2) проверяем подписку на канал
         subscribed = False
         try:
             member = await bot.get_chat_member(CHANNEL_ID, uid)
             status = getattr(member, "status", None)
             subscribed = status in ("member", "administrator", "creator")
         except Exception:
-           # Treat an unknown membership status as not subscribed.
+            # не смогли проверить — считаем, что не подписан
             subscribed = False
 
         kb = kb_notice_subscribed if subscribed else kb_notice_unsubscribed
 
-       # Send the event notification.
+        # 3) отправляем уведомление
         try:
             await bot.send_message(
                 uid,
@@ -827,12 +828,12 @@ async def _broadcast_last_post_then_notice(bot, event_title: str):
         except Exception:
             pass
 
-       # Throttle delivery to roughly 20 messages per second.
+        # ограничим скорость (≈20 сообщений/сек)
         await asyncio.sleep(0.05)
 
 
 # =========================
-# Channel post broadcasts
+# Рассылки поста:
 # =========================
 class BroadcastLastStates(StatesGroup):
     waiting_for_password = State()
@@ -857,7 +858,7 @@ LAST_POST_KEY = "last_channel_post_id"
 
 @router.channel_post()
 async def remember_last_channel_post(msg: Message):
-   # Support both @username and numeric channel IDs.
+    # Поддерживаем @username и numeric id
     is_same_channel = False
     try:
         is_same_channel = (
@@ -890,7 +891,7 @@ async def _broadcast_last_post(bot, reply_target):
         try:
             await bot.copy_message(
                 chat_id=uid,
-                from_chat_id=CHANNEL_ID,   # CHANNEL_ID may be an @username.
+                from_chat_id=CHANNEL_ID,    # может быть @username
                 message_id=int(post_id)
             )
             sent += 1
@@ -915,7 +916,7 @@ async def broadcast_last_cb(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer("🔒 Введите пароль для рассылки последнего поста канала:")
 
 # =========================
-# Scanner access management
+# Добавление админов:
 # =========================
 
 _SCANNER_META_KEY = "SCANNER_ADMIN_IDS"
@@ -934,7 +935,7 @@ async def _load_scanner_ids() -> set[int]:
             return set(int(x) for x in json.loads(raw))
         except Exception:
             return set()
-   # Fall back to environment configuration if metadata is not available.
+    # фолбэк на .env (если мета ещё не создана)
     try:
         return set(int(x) for x in getattr(config, "SCANNER_ADMIN_IDS", []))
     except Exception:
@@ -1088,8 +1089,8 @@ async def _purchase_menu_kb() -> InlineKeyboardMarkup:
 
 async def _notify_wishers_1p1_available(bot, event_code: str):
     """
-    Notify users who previously tried to buy a 1+1 ticket while slots
-    were unavailable. Do not send more notifications than available slots.
+    Шлём уведомления тем, кто пытался взять 1+1,
+    когда слоты были заняты. Не больше текущего остатка.
     """
     remaining = await remaining_one_plus_one_for_event(event_code)
     if remaining is None or remaining <= 0:
@@ -1125,12 +1126,12 @@ async def _notify_wishers_1p1_available(bot, event_code: str):
 
 
 # ===============================================
-# Event price and promo-code helpers
+# ==== helpers: цены и промокоды для события ====
 # ===============================================
 
 def _norm_ticket_key(raw: str) -> str:
     s = (raw or "").strip().lower()
-   # Accept several aliases for ticket types.
+    # допускаем разные варианты написания
     s = s.replace(" ", "")
     if s in ("1+1", "1plus1", "oneplusone"):
         return "1+1"
@@ -1138,22 +1139,21 @@ def _norm_ticket_key(raw: str) -> str:
         return "single"
     if s in ("promocode", "promo", "promocod", "промокод"):
         return "promocode"
-    return s  # Preserve unknown values for possible future ticket types.
+    return s  # на случай будущих типов
 
 def _parse_prices(text: str) -> dict[str, int]:
     """
-    Parse ticket prices from line-separated or comma-separated input.
-
-    Example:
+    Ожидаемый формат (по строкам; порядок свободный):
       1+1: 1500
       single: 1000
       promocode: 800
+    Допускается через запятую: "1+1:1500, single:1000, promocode:800"
     """
     if not text:
         return {}
     prices = {}
     parts = []
-   # Support both line-separated and comma-separated values.
+    # поддержим и переносы строк, и записи через запятую
     for line in text.replace(",", "\n").splitlines():
         line = line.strip()
         if not line:
@@ -1168,19 +1168,18 @@ def _parse_prices(text: str) -> dict[str, int]:
         if not v.isdigit():
             raise ValueError(f"Цена должна быть числом: «{p}»")
         prices[k] = int(v)
-   # Do not require a fixed set of ticket keys.
+    # sanity-check — важные ключи можно подсветить, но не требуем жёстко
     return prices
 
 def _parse_promocodes(text: str) -> list[str]:
     """
-    Parse a comma-separated promo-code list while preserving order.
-
-    An empty string means that no promo codes are configured.
+    "VIP, SUMMER2025, test_1" -> ["VIP", "SUMMER2025", "test_1"]
+    Пустая строка = нет промокодов.
     """
     if not (text or "").strip():
         return []
     arr = [c.strip() for c in text.split(",")]
-   # Remove empty values and duplicates while preserving order.
+    # фильтруем пустые, убираем дубликаты, сохраняем порядок
     seen = set()
     out = []
     for c in arr:
@@ -1212,7 +1211,7 @@ def _canon_type(t: str) -> str:
         return "1+1"
     if s == "single":
         return "single"
-   # Treat all other ticket types as promo-code tickets.
+    # всё остальное считаем промокодами
     return "promocode"
 
 async def _calc_revenue_for_event(event_code: str) -> tuple[int, int]:
@@ -1225,7 +1224,7 @@ async def _calc_revenue_for_event(event_code: str) -> tuple[int, int]:
     missing = 0
 
     for r in rows or []:
-        d = dict(r)  
+        d = dict(r)  # ← ключевая правка
         paid = (d.get("paid") or "").strip().lower()
         if paid != "оплатил":
             continue
@@ -1245,7 +1244,7 @@ async def _calc_revenue_all_events() -> tuple[int, int]:
     cache: dict[str, dict] = {}
 
     for r in rows or []:
-        d = dict(r)  
+        d = dict(r)  # ← ключевая правка
         paid = (d.get("paid") or "").strip().lower()
         if paid != "оплатил":
             continue
@@ -1368,4 +1367,4 @@ async def _send_export_to(bot, chat_id: int, only_this: bool):
     buf = BytesIO(); wb.save(buf); buf.seek(0)
     fname = f"users_{config.EVENT_CODE}.xlsx" if only_this else "users.xlsx"
     await bot.send_document(chat_id, BufferedInputFile(buf.getvalue(), filename=fname),
-                            caption="📄 Выгрузка базы users" + (f" — {config.EVE
+                            caption="📄 Выгрузка базы users" + (f" — {config.EVENT_CODE}" if only_this else " (все мероприятия)"))
