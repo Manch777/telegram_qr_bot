@@ -529,6 +529,7 @@ async def change_event_check_password(message: Message, state: FSMContext):
     # Режим: выключить продажи — просто ставим EVENT_CODE = "none"
     if mode == "off":
         config.EVENT_CODE = "none"
+        await set_meta("active_event_code", "none")
         await state.clear()
         await message.answer(
             "🛑 Продажи остановлены.\n"
@@ -556,9 +557,9 @@ async def change_event_set_name(message: Message, state: FSMContext):
     old = (config.EVENT_CODE or "").strip().lower()
     new = (title or "").strip()
 
-    # Меняем активное событие "на лету"
+    # Update the active event in memory and persist it across restarts.
     config.EVENT_CODE = new
-
+    await set_meta("active_event_code", new)
 
     # Сохраним во FSM, нужно ли потом делать рассылку
     await state.update_data(
