@@ -49,7 +49,7 @@ async def deep_link_start_handler(message: Message):
     payload = (parts[1] or "").strip()
 
     if not payload:
-        await message.answer("❌ Недопустимый QR-код.")
+        await message.answer("❌ Invalid QR code.")
         return
 
     # Normalize supported QR payload formats.
@@ -66,7 +66,7 @@ async def deep_link_start_handler(message: Message):
     try:
         candidate = int(number_part)
     except ValueError:
-        await message.answer("❌ Недопустимый QR-код.")
+        await message.answer("❌ Invalid QR code.")
         return
 
     # Legacy QR format: the numeric value represents a Telegram user ID.
@@ -83,13 +83,13 @@ async def deep_link_start_handler(message: Message):
             )
 
             await message.answer(
-                "✅ Пропуск активирован.\n"
-                f"Тип билета: {ticket_type}"
+                "✅ Ticket activated.\n"
+                f"Ticket type: {ticket_type}"
             )
         else:
             await message.answer(
-                "⚠️ Этот QR-код уже использован.\n"
-                f"Тип билета: {ticket_type}"
+                "⚠️ This QR code has already been used.\n"
+                f"Ticket type: {ticket_type}"
             )
 
         return
@@ -98,7 +98,7 @@ async def deep_link_start_handler(message: Message):
     row = await get_row(candidate)
 
     if row is None:
-        await message.answer("❌ QR-код не найден.")
+        await message.answer("❌ QR code not found.")
         return
 
     ticket_type = row["ticket_type"] or "-"
@@ -111,13 +111,13 @@ async def deep_link_start_handler(message: Message):
         )
 
         await message.answer(
-            "✅ Пропуск активирован.\n"
-            f"Тип билета: {ticket_type}"
+            "✅ Ticket activated.\n"
+            f"Ticket type: {ticket_type}"
         )
     else:
         await message.answer(
-            "⚠️ Этот QR-код уже использован.\n"
-            f"Тип билета: {ticket_type}"
+            "⚠️ This QR code has already been used.\n"
+            f"Ticket type: {ticket_type}"
         )
 
 
@@ -343,11 +343,11 @@ async def on_startup(app: web.Application):
             [
                 BotCommand(
                     command="start",
-                    description="Начать",
+                    description="Start",
                 ),
                 BotCommand(
                     command="help",
-                    description="ℹ️ Помощь / Связь с админом",
+                    description="ℹ️ Help / Contact Admin",
                 ),
             ]
         )
